@@ -1,0 +1,45 @@
+{
+  "posting_id": null,
+  "company": null,
+  "title": null,
+  "industry": null,
+  "job_role": null,
+  "source": {
+    "url": null,
+    "posted_at": null,
+    "deadline": null
+  },
+  "responsibilities": [],
+  "required_skills": [
+    {
+      "name": null,
+      "original_expression": null,
+      "evidence": null
+    }
+  ],
+  "preferred_skills": [
+    {
+      "name": null,
+      "original_expression": null,
+      "evidence": null
+    }
+  ],
+  "other_requirements": {
+    "career": null,
+    "minimum_years": null,
+    "education": null,
+    "certifications": [],
+    "other": []
+  },
+  "working_conditions": {
+    "region": null,
+    "employment_type": null,
+    "salary": null,
+    "work_schedule": null,
+    "work_arrangement": null,
+    "benefits": []
+  },
+  "explicitly_not_required": [],
+  "unmapped_requirements": [],
+  "raw_text": null
+}

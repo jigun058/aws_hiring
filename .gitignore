@@ -1,0 +1,5 @@
+docs/context/assets/drive/
+node_modules/
+__pycache__/
+.venv/
+.env

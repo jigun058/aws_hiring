@@ -1,0 +1,28 @@
+{
+  "card_id": null,
+  "activity": null,
+  "activity_type": null,
+  "period": {
+    "start": null,
+    "end": null
+  },
+  "objective": null,
+  "my_role": null,
+  "actions": [],
+  "tools_used": [],
+  "challenges": [],
+  "outcomes": [],
+  "skills": [
+    {
+      "name": null,
+      "category": null,
+      "evidence": null,
+      "evidence_source": null
+    }
+  ],
+  "source": {
+    "type": null,
+    "file_name": null
+  },
+  "missing_information": []
+}

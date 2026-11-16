@@ -1,0 +1,9 @@
+{
+  "enabledPlugins": {
+    "mattpocock-skills@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": ["Bash(git push:*)", "Bash(aws * delete*)", "Bash(rm -rf:*)"]
+  }
+}
+
