@@ -1,44 +1,75 @@
-# Handoff (2026-11-17 작성)
+# Handoff (2026-11-18 새벽)
 
 ## 지금 상태
 
-- **코드는 아직 한 줄도 없다.** 이번 세션은 자료 수집과 설계 합의(grilling)만 했다.
-- 팀 Notion과 Google Drive를 `docs/context/`로 가져왔다.
-- 구현 범위·로직·기술·일정·우선순위를 사용자와 합의했다. **기준 문서는 `docs/DESIGN.md`** 이니 구현 전에 반드시 읽는다.
-- 코드 밖의 일(팀원·대회 측 소통)은 `docs/TEAM.md`에 있다. 전부 `대기` 상태(C2만 완료)이며, 사용자가 팀원에게 아직 전달하지 않았다.
-- 문서의 커밋과 푸시는 사용자가 직접 한다. 원격 저장소는 비공개다.
+- **코드는 아직 한 줄도 없다.** 자료 수집, 설계 합의, 11/17 팀 회의 반영, 로직팀 코드(P1 참조 구현, 시뮬레이션 코드) 수령까지 끝났다.
+- **기준 문서는 `docs/DESIGN.md`** 다. 구현 전에 반드시 읽는다. 팀 소통은 `docs/TEAM.md`(0절에 기다리는 것), 회의 결과와 받은 코드 요약은 `docs/context/08-회의-1117.md`.
+- 문서 변경은 모두 스테이징만 되어 있다. 커밋과 푸시는 사용자가 직접 한다. 제안 메시지: `Reflect 11/17 team meeting: drop track A, adopt P2, deadline 11/22`
 
-## 다음에 할 일 (11/17~18 목표: 로컬에서 5단계가 끝까지 도는 뼈대)
+## 이번 세션에서 정한 것과 이유
 
-1. 팀원 엔진을 저장소 제자리로 복사한다: `docs/context/assets/drive/서울시데이터/careerlens_db_outputs/`의 `src/*.py`와 `out/*.csv`. **수정하지 않는다.** `python src/recommend_cli.py "..."`가 도는지부터 확인한다(pandas, scikit-learn 필요. `kiwipiepy`는 README의 설치 목록에 있으나 추천에 실제로 필요한지는 미확인).
-2. 받지 않은 `cleaned_job_postings.csv`(56MB)를 받는다. 공고를 보여 주는 `postings_for`에 필요할 가능성이 높다(코드로 확인할 것). Drive 파일 ID `1q-4KXCzjSjkmSqOFVzwgUEyCVXp7FPc2`, 큰 파일은 `https://drive.usercontent.google.com/download?id=<ID>&export=download&confirm=t`로 받는다. git에는 넣지 않는다.
-3. FastAPI 서버: 에이전트(Bedrock Converse + 도구 4개: 역량 추출, 직무 추천, 공고 검색, 교육과정 검색)와 단계별 API.
-4. React 화면(Tailwind + shadcn/ui): `DESIGN.md`의 화면 배치대로 구조와 동작부터. 디자인 시안은 사용자가 Claude Design으로 만들어 `docs/design/`에 넣을 예정(11/19 목표). 오기 전에는 기본 부품 모습으로 둔다.
-5. 교육과정 추천은 `docs/context/assets/drive/고용24_교육과정데이터/courses.json`을 쓴다. 구조는 `docs/context/06-교육과정-전처리-과정.md`.
+| 결정 | 이유 |
+| --- | --- |
+| **제출 마감 11/22**(발표 자료 + 시연 영상 링크), 발표 11/25. **범위는 줄이지 않고** 일정만 이틀 당김. 모자라면 빼지 말고 11/23~24로 미룸 | 대회 공지. 사용자가 범위 축소를 원하지 않음 |
+| 트랙 A·Kaggle·P4를 MVP에서 완전히 뺌. 첫 화면 "처음 일자리를 찾고 있어요"는 "준비 중"으로만 | 회의 결정. Kaggle 역량 매핑이 잘 안 되고 시간 부족 |
+| ⑥ 공고 분석은 로직팀 P2 명세대로. 규칙 처리 먼저 전량, AI는 low 공고(약 8,600건)만 | P2 명세가 나옴 |
+| 표본 300건 검수 유지. 필수·우대 분류는 칸이 나뉜 공고(26%)를 정답지로 코드가 자동 측정, 팀원은 역량만 검수 | P2 6절이 요구하고 AI가 규칙보다 나은지 판단할 근거가 필요. 직접 세어 보니 필수·우대 문장 칸이 둘 다 빈 공고가 73.8%(사용자는 다 나뉘어 있다고 생각했으나 잘 나뉜 것은 자격증 쪽) |
+| 경험 규칙 보정(시뮬레이션 2~4번)과 EXB01~05를 폐기하지 않고 구현 담당이 엔진 밖에서 넣음 | 팀원은 어렵다고 봤으나 규칙 목록에 항목을 더하는 일이라 쉬움. 최경리 시연과 "흩어진 경험" 스토리에 필요 |
+| 채용시장 분석 화면 → "재취업 이야기" 화면(내용은 팀이 줌) | 회의: 기술보다 스토리 강조 |
+| P6 대신 구현 담당 기본값(추천 이유·말투·검색·상태 안내, DESIGN 5절) | 회의 문서에 붙였고 이견 없음 |
+| 시뮬레이션 8번은 로직팀 코드 방식 그대로(엔진 `extract`를 감싸 근거 강도를 카드 등급으로 교체) | 엔진 수정 없이 같은 숫자를 재현 |
+| 발표: 데이터 전처리는 팀이 이해한 처리 방법만 설명하고 AI 사용은 물으면 밝힘. AI 기술 어필은 서비스 안의 AI 기능에서. 모델 비교는 내부 검증으로 하되 발표에 먼저 내세우지 않음(정확도 표는 질문 대비 자료) | 팀원 한 명이 지난 대회에서 AI 전처리로 질문 공격을 받은 경험. 구현은 바뀌지 않음 |
 
-그다음은 `DESIGN.md` 6절의 일정을 따른다. 시간이 남으면 뒤 날짜 목표를 당겨서 한다.
+## 다음에 할 일 (11/18 목표, DESIGN 7절)
+
+1. **로직팀 시뮬레이션 코드부터 재현한다** (`docs/context/assets/notion-1118/sim/`).
+   - `careerlens.db`는 `docs/context/assets/drive/db/careerlens.db`에 받아 두었다(git 제외). `courses.json`은 `docs/context/assets/drive/고용24_교육과정데이터/courses.json`.
+   - 환경 변수 `CAREERLENS_DB`, `COURSES_JSON`을 주고 `run_p1_tests.py`(기대 50/50, 28/30) → `04_build_engine_inputs.py`(기대 공고 40,479건, 공고별 역량 120,186행) → `07_sim_full.py`(트랙 A 부분은 건너뛰게) 순서로 돌린다.
+   - 결과를 시뮬레이션 문서(`docs/context/assets/notion-1117/CareerLens_추천_시뮬레이션_결과_트랙AB.md`)의 트랙 B 숫자와 비교한다. 다르면 고치기 전에 사용자에게 알린다(W6).
+   - pandas, numpy, scikit-learn 설치 필요(지금 미설치).
+2. **저장소 구조 잡기**: 엔진 원본(`sim/engine/src/`, Drive판과 같음 확인), P1 참조 구현, `04`로 만든 엔진 입력을 저장소 제자리로. 엔진·참조 구현 코드는 수정하지 않는다. P1 시험(정답 50·검증 30)은 저장소 자동 시험으로 넣는다.
+3. **경험 규칙 보정**: 규칙은 엔진의 `knowledge.EXPERIENCE_RULES`와 DB의 `experience_keyword_mapping` 두 곳에 있다. 두 곳에 같은 보정을 적용하는 파일 하나를 만든다(DESIGN ③ 표: EX024·EX027·EX036 수정, EXB01~05 추가). 시뮬레이션 4번("전기·전자 지식")은 원인부터 찾는다. 박물류·최경리 전후 비교를 남긴다(T16).
+4. **시뮬레이션 5~8번**을 엔진 밖에서 처리한다. 6번·8번은 `07_sim_full.py` 145~179행 방식 그대로. 5번(C4·C5 제외)은 엔진이 `out_dir` CSV(`occupation_keyword_profile.csv` 등)를 읽으므로 걸러 낸 사본을 넘기는 방식을 확인한다. 7번(경력 없는 사용자에게 경력직 공고 뒤로)은 새로 만든다.
+5. **P2 규칙 처리(F2-1~F2-4)**를 38,185건 전체에 돌려 파일로 저장한다. P2 원문(`docs/context/assets/notion-1118/P2_서울시공고분석_명세.md`)의 정규식과 예시 6개를 시험으로 넣는다. `posting_keywords` 표를 출발점으로 써도 된다(P2 F2-3 참고).
+6. **FastAPI 뼈대**: 에이전트(Bedrock Converse + 도구 4개), P3 인터뷰 흐름(다음 질문은 코드가 고름), 단계별 API.
+
+11/19는 화면 뼈대, 파일 업로드, 공고 카드·순서, 즉석 공고 분석, 표본 300건 비교다. 시간이 남으면 뒤 날짜 목표를 당긴다.
+
+## 막힌 것·팀원에게 물어볼 것
+
+- **W2** 시연 인물 시나리오: 지혜님이 11/18까지 준다. 오기 전에는 시뮬레이션의 박물류·최경리로 개발한다.
+- **W3** 재취업 이야기 화면 내용(문구·통계·출처): 팀. 오기 전에는 자리만 만든다.
+- **C1** 예산 한도: 지혜님이 대회 측에 메일. 답이 오기 전에는 AI 보완 전량을 돌리지 않는다.
+- **C5** 제출(11/22) 뒤에도 서비스를 고쳐 11/25 라이브 시연에 써도 되는지: 아직 안 물음. 안 되면 11/23~24로 미룬 기능은 발표에 못 쓴다.
+- **T16·T17·T18**은 아직 팀원에게 보내지 않았다: 경험 규칙 보정 결과 공유(구현 후), P2 3절 분석 화면 쓰임새를 따르지 않음, 300건 검수 방식 안내.
 
 ## 환경
 
-- AWS CLI: `~/.local/bin/aws` (v2, 이번 세션에 설치). 프로필 `tae`, 리전 `ap-northeast-2`, 설정은 `~/.aws/config`.
+- AWS CLI: `~/.local/bin/aws` (v2). 프로필 `tae`, 리전 `ap-northeast-2`, 설정은 `~/.aws/config`.
 - 로그인이 만료되면 사용자에게 `! aws sso login --profile tae --use-device-code` 실행을 부탁한다. 브라우저가 자동으로 열리지 않으므로 출력된 주소와 코드를 사용자가 직접 입력해야 한다.
 - Bedrock 호출 확인됨(서울 리전, 추론 프로필 ID로 호출):
   - 되는 것: `global.anthropic.claude-sonnet-4-6`, `global.anthropic.claude-sonnet-4-5-20250929-v1:0`, `global.anthropic.claude-haiku-4-5-20251001-v1:0`, `apac.amazon.nova-lite-v1:0`, `apac.amazon.nova-pro-v1:0`, `global.amazon.nova-2-lite-v1:0`
   - 안 되는 것: Claude 5 계열(목록에는 보이지만 "이 계정에서 사용 불가"로 거부됨)
-- 계정 권한은 AdministratorAccess. 역할·EC2·S3·DynamoDB 생성이 정책 모의 평가에서 허용으로 나왔으나 실제 생성은 아직 안 했다. S3 버킷, DynamoDB 테이블, 인스턴스 프로필은 현재 하나도 없다.
-- 이 컴퓨터: Python 3.12(pandas·scikit-learn 미설치), Node·npm·Docker 있음, `unzip` 없음.
+- 계정 권한은 AdministratorAccess. S3 버킷, DynamoDB 테이블, 인스턴스 프로필은 현재 하나도 없다.
+- 이 컴퓨터: Python 3.12(pandas·numpy·scikit-learn 미설치), Node·npm·Docker 있음, `unzip` 없음(파이썬 `zipfile` 사용). `rm -rf`는 권한에서 막혀 있다.
+- Notion 첨부 파일의 서명 URL은 5분이면 만료된다. `notion-get-file-download-urls`로 새로 받고 바로 내려받는다. Notion zip은 한글 파일 이름이 cp437로 들어 있어 `name.encode('cp437').decode('utf-8')`로 풀어야 한다.
+- Drive 큰 파일은 `https://drive.usercontent.google.com/download?id=<ID>&export=download&confirm=t`로 받는다. `cleaned_job_postings.csv`(ID `1q-4KXCzjSjkmSqOFVzwgUEyCVXp7FPc2`)는 아직 안 받았다(`careerlens.db`의 `job_postings`에 같은 내용이 있어 필요 없을 가능성이 큼).
 
 ## 주의
 
-- **비용이 드는 AWS 명령은 실행 전에 사용자 승인을 받는다.** 예산 한도를 모른다(`TEAM.md` C1). Kaggle 전량 추출 전에는 표본 300건으로 잰 실측 비용을 보고하고 승인받기로 했다.
-- 사용자는 코드 구조를 React 경험자로서 직접 검토한다. 화면은 "급조된 데모"가 아니라 실제 서비스처럼 보여야 한다(`DESIGN.md`의 화면 품질 기준 여섯 가지).
+- **비용이 드는 AWS 명령은 실행 전에 사용자 승인을 받는다.** low 공고 AI 보완(약 8,600건) 전에는 표본 300건으로 잰 실측 비용을 보고하고 승인받는다.
+- 화면은 "급조된 데모"가 아니라 실제 서비스처럼 보여야 하고, 주 사용자가 40~50대라 큰 글자·쉬운 말이다.
+- P3가 금지한 질문(경력 공백 이유, 나이, 결혼·출산·육아, 건강, 가족 상황, 소득, 종교, 정치)은 LLM 프롬프트와 코드 검사 양쪽에 넣는다.
+- 로직팀 코드(참조 구현, 엔진, 시뮬레이션)는 빠르게 만든 검증용이라 사용자가 검증을 강조했다. 시험으로 먼저 확인한다. 시뮬레이션의 경험 카드 부분은 정규식 간이 구현이라 서비스에서는 P3(LLM 슬롯 추출 + 인터뷰)로 대체한다.
 - 확인하지 않고 정한 것:
   - Bedrock이 파일(PDF, Word, 이미지)을 직접 받는다는 것과 크기 한도(약 4MB)는 기억에 의존했다. 파일 업로드 구현 첫날 문서로 확인한다.
-  - 모델 단가와 추출 비용(Kaggle 전량 약 10달러)은 추정이다.
+  - 모델 단가와 AI 보완 비용은 추정이다.
   - 응답을 글자 단위로 흘려보내는 방식이 CloudFront를 거쳐 동작하는지는 배포 때 확인한다.
-- `DESIGN.md`에서 `[기본값]`으로 표시한 규칙 세 가지(인터뷰 멈춤 기준, 근거 등급, 트랙 A 공고 일치도)는 구현 담당이 임시로 정한 것이라 팀원이 바꿀 수 있다. 한곳에 모아 갈아 끼우기 쉽게 만든다.
+  - P2의 AI 대상 8,616건은 직접 세어 보지 않았다(필수·우대 칸 비율 73.8%는 확인함).
 
 ## 사용자가 할 일
 
-- `docs/TEAM.md`의 T1~T7을 팀원에게 전달하고, C1·C3·C4를 대회 측에 확인(또는 팀원에게 부탁).
-- `docs/design/claude-design-prompt.md`의 프롬프트로 Claude Design 시안 제작.
+- 스테이징된 변경 커밋·푸시.
+- `docs/context/assets/notion-1118/sim_code/` 삭제(한글 이름이 깨진 중복 폴더, git 미포함).
+- `docs/design/claude-design-prompt.md`(재취업 이야기·공고 카드 갱신됨)로 Claude Design 시안 제작, 11/19까지.
+- 대회 측에 C5 문의(또는 지혜님 메일에 함께).

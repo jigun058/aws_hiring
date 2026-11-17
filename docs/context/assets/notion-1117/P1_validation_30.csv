@@ -1,0 +1,31 @@
+﻿val_id,트랙,문장(원문),기대 키워드 idx(;구분),판단 근거(원문 기준),정답 애매(설계자 판단)
+VA01,A,"While we don't require past experience within our specific stack, this person needs to be user-oriented, strong in Javascript, proficient on the backend, eager to learn, and a great team player.",44;111;139;144,"strong in Javascript→44, proficient on the backend→111, eager to learn→144(C4), team player→139(C4)",
+VA02,A,"FULL STACK SOFTWARE ENGINEER, DATA (STARLINK) At SpaceX we're leveraging our experience in building rockets and spacecraft to deploy Starlink, the world's most advanced broadband internet system.",111,제목의 full stack software engineer→111. 뒤 문장은 회사 소개라 매핑 없음,
+VA03,A,"Skills & experience you need: Must have a valid driver's license, good driving record, and current auto insurance.",67,운전면허→67(자격이 함의). auto insurance는 개인 보험 요건으로 24 아님,
+VA04,A,A best-in-class ETL pipeline is core to our ability to build a great product and have a meaningful impact on healthcare decisions.,180,ETL pipeline→180. 요구인지 회사 설명인지는 P2가 판단(mention 예상),Y
+VA05,A,AVIONICS TEST ENGINEER (STARSHIELD) Starshield leverages SpaceX's Starlink technology and launch capability to support national security efforts.,110,항공전자 하드웨어 시험 직무→110 시험·분석. national security는 17 아님,Y
+VA06,A,"If you have some experience with either Typescript or Go, or you're very interested in this space, we'd love to talk with you.",44,"TypeScript, Go 모두 44(or 묶음)",
+VA07,A,"If you are a dedicated systems programmer with substantial C/C++ or Rust knowledge and the ability to solve problems in a minimally terrible, minimally fragile, and reasonably clear way, we'd like to hear from you.",45;168,"C/C++·Rust·systems programmer→45, solve problems→168",
+VA08,A,"Since this position requires SAFE Act registration, employees are required to re...",,SAFE Act 등록(대출 상담 자격) 요건. 역량 아님,
+VA09,A,"You will own the relationship between our vehicle hardware/systems teams and manufacturing teams while spearheading your own projects, utilizing your skills in analysis, development testing, and mechanical design.",19;110,"mechanical design→19, development testing(하드웨어 개발 시험)→110",Y
+VA10,A,"Python, Elixir and Postgres experience are helpful but not required.",40;41,"Python→40, Postgres→41. Elixir는 사전 밖(미분류)",
+VA11,A,"QUALIFICATIONS (Education, Experience and Certifications) Typically Required: 4-year college degree (Design) preferred or other related coursework/certificates or equivalent years of related work exper...",,학위·수료 요건. 역량 아님,
+VA12,A,Maybern is founded by top engineering experts with deep knowledge of the fund management space.,,회사 소개,
+VA13,A,Preference for interest/experience in urban planning/data/analysis.,115,data/analysis→115. urban planning은 해당 키워드 없음,
+VA14,A,Experience in HPC scientific computing is valued.,,HPC 과학 컴퓨팅은 사전에 맞는 키워드 없음(미분류 보관),Y
+VA15,A,"HARDWARE TEST ENGINEER (STARLINK) SpaceX is leveraging its experience in building rockets and spacecraft to deploy Starlink, the world's most advanced broadband internet system.",110,하드웨어 시험 직무→110,Y
+VA16,A,One to three years of experience in retail role.,78,retail→78. 1~3년은 경력 규칙(P2),
+VA17,A,"We're looking for passionate C++ software developers with experience in GPGPU programming frameworks and technologies, such as OpenCL and CUDA, GPU based optimizations techniques, and modern 3D frameworks.",45;111,"C++→45, software developers→111. CUDA·OpenCL은 사전 밖",
+VA18,A,"Our current stack is Ruby on Rails + React on AWS, and are looking for someone familiar with these technologies or willing to learn.",44;46,"Rails·React→44, AWS→46",
+VB01,B,"구성현대서비스 종합블루핸즈 입니다 정비 엔지니어 채용합니다 신입도 가능합니다 경력자 우대 월-금 ) 09:00-18:00 5일제근무 국경일,토,일 휴무 급여는 면접후 결정",103,정비 엔지니어→103. 근무시간·급여는 비역량,
+VB02,B,보증수리와 일반수리 및 자동차정비 엔지니어분이며 유경험자 우대합니다,29;103,"자동차정비→29, 수리·정비 업무→103",
+VB03,B,") 현장 A/S 업무를 겸하며, 경력 무관하나 동종업계(산업용 송풍기)의 경력사항은 우대합니다",103,A/S 업무→103,
+VB04,B,"★전기기사,기계설비 초급 필수",20;104,전기기사(자격)→20·104(자격 규칙). 기계설비 초급은 자격만,
+VB05,B,보육교사 자격증 필수 입니다,,보육교사는 자격만 기록. 현재 자격 규칙에 없어 역량 연결 없음(규칙 추가 검토),Y
+VB06,B,없음 / 서해선 시흥능곡역 2번 출구에서 1분 거리 (올리브영 옆 건물),,위치 정보,
+VB07,B,3개월 자차 출퇴근 필수,,근무 조건(자차 출퇴근),
+VB08,B,"경비 및 주차관리 업무 경험자 / 컴퓨터 활용 가능자 / 2 / 선동둔치체육시설 일반 1명, 보훈 1명 / 보안관련 업무 경험자 / 5 / 풍산 당정근린공원 일반 2명",91,경비·주차관리·보안 업무→91. '컴퓨터 활용'은 특정 도구가 아니라 미매핑,
+VB09,B,가톨릭 신자 최우선 우대 / 경력 우대 (최소 경력 5년) [차량 모델] / 벤티 35인승 (대우BS090) / 대형버스입니다,127,35인승 대형버스 운행→127. 종교 우대는 매칭 제외,Y
+VB10,B,"ㆍ정보처리기사 자격보유자 ㆍ특정전공자(컴퓨터공학,이공계열) ㆍ운전면허보유",15;111;67,"정보처리기사→15·111(자격 규칙), 운전면허→67, 전공은 비역량",
+VB11,B,전기 배선 작업 및 전기 판넬 제작 조립 전기설비 및 생산설비 전기 관련 유지보수 PLC 프로그램 제작 및 수정 전기도면 확인 및 현장 작업 경력 5년 이상 우대 출퇴근 가능지역 거주자 우대 (인근거주자),20;59;90;101;104,"배선→104, 조립→101, 유지보수→90, PLC→59, 전기설비→20",
+VB12,B,우대사항 ㆍ자동차정비기능사1급 우대 복리후생 ㆍ기숙사제공 ㆍ3식제공 ㆍ4대보험 / 퇴직연금,,자동차정비기능사는 자격만(규칙 없음). 복리후생은 비역량,Y

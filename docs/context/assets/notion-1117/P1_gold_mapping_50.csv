@@ -1,0 +1,51 @@
+﻿gold_id,트랙,요구 문구,출처,기대 키워드(idx:이름),기대 세부기술,비역량 요소(다른 필드로 기록),C4·C5 처리,함정 유형,판단 근거,사람 검토 필요
+G01,A,"Extensive knowledge of Typescript, React, and Node.js",미국 공고 원문,44:웹·Java 개발 기술,TypeScript;React;Node.js,,,,세 기술 모두 44의 하위 세부 기술. 키워드는 1개만 출력(중복 제거),
+G02,A,"Strong programming skills in Python, with experience in Django, Scrapy or Celery frameworks a plus",미국 공고 원문,15:프로그래밍 지식; 40:Python; 113:데이터 수집,Python;Django;Scrapy,,,or 묶음,"programming skills→15, Python·Django→40, Scrapy(크롤링 프레임워크)→113. Celery는 사전에 없음→미분류 표현으로 보관",Y
+G03,A,Experience with SQL or PowerBI a plus.,미국 공고 원문,41:SQL; 43:데이터 시각화 도구,SQL;Power BI,,,or 묶음,두 키워드를 같은 group_id로 묶음(P2에서 하나만 충족해도 충족),
+G04,A,Some Docker experience would be a plus.,미국 공고 원문,47:서버·OS 운영,Docker,,,,Docker는 47의 하위,
+G05,A,Familiarity with Figma/Storybook/modern design tools,미국 공고 원문,49:디자인 툴; 44:웹·Java 개발 기술,Figma;Storybook,,,,Figma→49. Storybook은 프론트엔드 UI 컴포넌트 도구라 44,Y
+G06,A,Demonstrated experience in building generative AI products,미국 공고 원문,178:AI·머신러닝,LLM,,,AI 개발 vs 활용,generative AI '제품을 만드는' 경험이므로 178(활용만이면 173),
+G07,A,Machine learning experience preferred but not required.,미국 공고 원문,178:AI·머신러닝,,,,,"not required는 P2에서 preferred로 처리, P1 매핑은 178",
+G08,A,1+ years of experience in customer service with exceptional customer service skills.,미국 공고 원문,76:고객 응대,,경력 1년(경력 요건),,,경력 연수는 P2 경력 규칙으로 넘김,
+G09,A,"You will be required to move heavy objects, and you may drive maintenance trucks to various locations on the property.",미국 공고 원문,67:차량 운전; 146:중량물 취급,,,146은 C5→필터 정보,,"heavy objects→146(점수 제외), drive trucks→67",
+G10,A,Candidates must have worked/studied in US for a minimum of 3 years and be able to work onsite in New York City.,미국 공고 원문,(매핑 없음),,거주·학업 요건; 근무지 조건,,경력 오판정,'3 years'는 업무 경력이 아니라 거주·학업 기간. 역량 매핑 0개,
+G11,A,"Must have a minimum of 3 years relevant experience and be eligible to obtain a DOD Secret Security Clearance, which requires US Citizenship.",미국 공고 원문,(매핑 없음),,경력 3년(경력 요건); 보안 인가·시민권(자격 요건),,security 오분류,Security Clearance는 신원 자격이지 17 보안 지식이 아님(CTX-SECURITY),
+G12,A,A degree in Computer Science or a related technical field is required.,미국 공고 원문,(매핑 없음),,학위 요건,,학위≠역량,학위·전공은 other_qualifications. 15로 매핑하지 않음,
+G13,A,"Potential candidates should have strong fundamentals of JavaScript, HTML and CSS, as well as experience with SPA frameworks.",미국 공고 원문,44:웹·Java 개발 기술,JavaScript;HTML/CSS,,,,모두 44,
+G14,A,Strong experience in C++,미국 공고 원문,45:C·임베디드 기술,C++,,,,C++→45,
+G15,A,"If you're familiar with or are eager to learn technologies such as Go, Kubernetes, & Helm, apply",미국 공고 원문,44:웹·Java 개발 기술; 47:서버·OS 운영; 144:학습 능력,Go;Kubernetes,,144는 C4→표시만,Go 오분류,"대문자 Go+기술 나열→44(CTX-GO, 대소문자 문맥 규칙 필요). eager to learn→144(점수 제외)",Y
+G16,A,Employees hired into this position will be required to obtain their nursing license within 90 days of their hire date.,미국 공고 원문,(매핑 없음),,자격 요건(입사 후 취득),,,입사 후 취득 조건은 지원 시점 요건이 아님. 자격 정보로만 기록,Y
+G17,A,"The ideal candidate will have at least a full year's experience with, and a desire to learn more about, PHP, MySQL/MariaDB, Javascript and git.",미국 공고 원문,44:웹·Java 개발 기술; 41:SQL; 15:프로그래밍 지식,PHP;MySQL;JavaScript;Git,경력 1년,,,"MySQL/MariaDB→41, git→15(검토)",Y
+G18,A,We're currently seeking back-end engineers proficient in Python to join our platform team.,미국 공고 원문,40:Python; 111:소프트웨어 개발,Python,,,,back-end engineers(직무 명사)→111,
+G19,A,SwiftUI experience is a must have.,미국 공고 원문,179:모바일 앱 개발,Swift/SwiftUI,,,,SwiftUI→179,
+G20,A,Ideal candidates have at least one year of React/React Native programming experience.,미국 공고 원문,44:웹·Java 개발 기술; 179:모바일 앱 개발,React;React Native,경력 1년,,React vs React Native,"React→44, React Native→179로 따로 매핑",
+G21,A,"Build and maintain data pipelines for bot detection and content moderation using Python, Snowflake,...",미국 공고 원문,180:데이터 엔지니어링; 40:Python; 16:데이터베이스 지식,Python;Snowflake,본문 잘림(...),,,"data pipelines→180, Snowflake→16. 잘림은 P2 신뢰도에 반영",
+G22,A,"You'll own end-to-end data pipelines, develop trusted metrics, and enable CX stakeholders to make faster, better decisions",미국 공고 원문,180:데이터 엔지니어링; 170:성과 측정·분석,,,,,metrics 개발→170,
+G23,A,"Proficiency with Python, Docker, and unit testing.",미국 공고 원문,40:Python; 47:서버·OS 운영; 181:소프트웨어 테스트,Python;Docker;pytest/JUnit,,,,unit testing→181,
+G24,A,Testing with Cypress or similar.,미국 공고 원문,181:소프트웨어 테스트,Cypress,,,,or similar→대체재 인정 신호(P4),
+G25,A,"Operates, maintains and repairs HVAC/R equipment including air handlers, chillers, refrigeration systems, etc.",미국 공고 원문,103:설치·정비; 90:시설 관리·보수,,,,R 오분류,HVAC/R의 R은 R 언어 아님(CTX-R),
+G26,A,"what we offer: medical, dental, vision, life, ad&d, & disability insurance",미국 공고 원문,(매핑 없음),,복지,,복지 오분류,insurance는 복지 문장(CTX-BENEFIT). 24 금융·보험 지식 아님,
+G27,A,full time overnight security officer - weekly pay,미국 공고 원문,91:경비·보안; 148:교대·야간 근무 적응,,급여 조건,148은 C5→필터 정보,security 오분류,security officer는 경비직(91). 17 아님,
+G28,A,you'll own gtm strategy and refine the icp as you learn what it takes to win.,미국 공고 원문,174:기획·전략 수립; 13:마케팅 지식,,,,go 오분류,gtm=go-to-market→13. Go 언어 아님,
+G29,A,"you can decide what to work on, and can teach yourself whatever you need to get things done.",미국 공고 원문,144:학습 능력,,,144는 C4→표시만,teach 오분류,teach yourself는 72 교육·강의가 아님,
+G30,A,ionworks builds battery simulation and optimization software used by r&d teams designing next-generation batteries.,미국 공고 원문,(매핑 없음),,회사 소개,,회사 소개 오분류,r&d는 고객사 설명(CTX-COMPANY). 109 아님,
+G31,B,운전면허 1종보통 필수,서울시 공고 원문,67:차량 운전,,자격(자동차운전면허 1종보통),,,"자격은 licenses로, 역량은 67",
+G32,B,사회복지사 자격증 소지자 필수,서울시 공고 원문,0:사회복지 지식,,자격(사회복지사),,,courses 규칙: 사회복지사→0. 법정 필수 여부는 occupation_licenses로 판단(P4),
+G33,B,전동조립은 필수로 가능하신분 지원바랍니다,서울시 공고 원문,101:조립; 60:공구 활용,,,,,전동(공구)+조립,
+G34,B,★조리사 면허증 필수,서울시 공고 원문,85:조리; 8:조리 지식,,자격(조리사),,,"courses 규칙 조리→85,8",
+G35,B,치매교육 이수 필수,서울시 공고 원문,1:노인 돌봄 지식,,교육 이수 요건,,,치매→1(DB 동의어). '이수' 요건은 P2 other_qualifications로도 기록,Y
+G36,B,소방안전관리자 특급 필수,서울시 공고 원문,22:환경·안전 법규 지식; 128:안전 관리,,자격(소방안전관리자 특급),,,courses 규칙에 소방안전관리자는 없음(소방설비만). 자격 의미로 22·128 연결 - 검토,Y
+G37,B,보건증 필수,서울시 공고 원문,(매핑 없음),,제출 서류(보건증),,,서류 요건. 역량 아님,
+G38,B,맞교대 근무 가능자 / 책임감 있고 성실하신 분,서울시 공고 원문,148:교대·야간 근무 적응; 135:책임감,,,"148=C5 필터, 135=C4 표시만",,둘 다 점수 제외 분류,
+G39,B,필수: 자동차운전면허 1종보통/3.5톤 이상 차량 가능./지게차 3톤이상 전동지게차 가능,서울시 공고 원문,67:차량 운전; 56:지게차 운전,,자격(운전면허 1종보통); 차량 규격 조건,,,지게차 운전 가능→56. 지게차운전기능사 자격 보유 여부는 별도,
+G40,B,"청소경력 6개월 이상, 이력서",서울시 공고 원문,89:청소·미화,,경력 6개월; 제출 서류,,,경력은 P2,
+G41,B,자격증 : 직업상담사2급 이상 자격증 필수,서울시 공고 원문,73:상담,,자격(직업상담사 2급),,,courses 규칙 직업상담사→73,
+G42,B,"제주도 내 병,의원 영업 및 관리 (제주도 거주 필수) ㆍ거래처 및 고객 관리 ㆍ자사제품 정보 전달",서울시 공고 원문,79:영업; 153:고객 관계 관리; 25:제품·상품 지식,,거주 요건,,,거주는 비역량. 업무 문장이라 P2에서 responsibility,
+G43,B,※ 수동 변속 화물차 운송 경력 최소 1년 이상 필수,서울시 공고 원문,67:차량 운전; 83:배송·배달,,경력 1년,,,운송→83,
+G44,B,식품위생 및 급식관리 업무 수행 가능자 / 장애인에 대한 이해도가 높은자,서울시 공고 원문,7:영양·식품위생 지식; 86:급식·배식; 2:장애인 지원 지식,,,,,세 키워드,
+G45,B,"금형기능사, 용접기능사 우대",서울시 공고 원문,55:용접 기술,,"자격(금형기능사, 용접기능사)",,,courses 규칙 용접→55. 금형기능사는 규칙 없음→자격만 기록,Y
+G46,B,노인장기요양보험체계를 어느정도 이해하는 자,서울시 공고 원문,1:노인 돌봄 지식,,,,,요양 제도 이해→1(정의에 노인 돌봄·요양 제도 포함),Y
+G47,B,영어 능통자 및 해외 연수경험자 우대 / 기계설계 공학 전공자 우대,서울시 공고 원문,65:외국어(영어),,전공 요건; 해외 연수 경험,,전공≠역량,전공은 비역량. 기계설계(19)로 매핑하지 않음,
+G48,B,"운전면허 1종 보통 소지자 필수, 장애인 우대, 재활보조기기 교육이수자 우대, 컴퓨터활용능력 우대, 사회복지사 우대",서울시 공고 원문,67:차량 운전; 36:스프레드시트(엑셀); 0:사회복지 지식,,"자격(운전면허, 컴퓨터활용능력, 사회복지사); 정책 우대(장애인); 교육 이수",,정책 우대,장애인 우대는 정책 우대(매칭 제외). 재활보조기기 교육은 사전에 없음→미분류,Y
+G49,B,롤재단기(슬리터)로 필름이나 스티커원단 재단 5년이상 경력자 우대합니다,서울시 공고 원문,102:가공; 100:기계 조작,,경력 5년,,재단 오분류,필름 재단은 134 봉제·재단이 아님(CTX-JAEDAN),
+G50,B,"대중교통이 원활하지 않아, 자차 출퇴근 가능자 우대합니다 / 인근거주자 우대 / 취업보호대상자(보훈대상자)는 우대합니다",서울시 공고 원문(3개 공고 결합),(매핑 없음),,근무조건(자차 출퇴근); 거주; 정책 우대,,,모두 비역량. 자차 출퇴근은 67이 아님(운전 업무가 아님),
