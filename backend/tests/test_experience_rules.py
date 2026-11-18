@@ -64,3 +64,9 @@ def test_still_matches(sentence, present):
 
 def test_card_rules_cover_all_rules():
     assert len(X.card_rules()) == sum(len(r['kw']) for r in X.RULES)
+
+
+def test_p3_example7_family_care():
+    """P3 9절 예시 7 문장이 EXB01에 걸려야 한다(표의 표현만으로는 안 걸려서 넓힘)."""
+    k = kws('시어머니가 편찮으셔서 2년 동안 병원 같이 다니고 약 챙겨 드렸어요.')
+    assert k['돌봄 서비스'] == 'transferable' and k['노인 돌봄 지식'] == 'transferable'

@@ -9,6 +9,7 @@
 - 명세가 비어 있거나 서로 어긋나면 임의로 정하지 말고 사용자에게 알린다.
 - 코드 밖의 일(팀원에게 전달·부탁할 것, 대회 측에 확인할 것, 발표 담당에게 넘길 기술 자료)은 `docs/TEAM.md`에서 관리한다. 작업 중 그런 일이 생기면 바로 거기에 적고, 끝난 항목은 지우지 말고 상태를 `완료`로 바꾼다.
 
+- 발표에 쓰거나 피해야 할 사실(규모 숫자, 검증 결과, 틀리기 쉬운 표현, 한계, 바뀐 점수)은 `docs/PRESENTATION_FACTS.md`에 모은다. 비개발자 팀원이 읽는다. 구현 중 그런 사실이 생기거나 숫자가 바뀌면 같은 작업 안에서 바로 고치고 맨 위 "마지막 갱신" 날짜를 바꾼다. 팀 공유본은 Claude Docs 문서 "CareerLens 발표 참고 사실"(https://claude.ai/artifact/XFrff8GQPAeivpfH6iqNuT)이다. 이 파일을 고치면 그 문서의 해당 섹션도 Docs 커넥터로 고친다(새로 만들지 않는다). 원본은 이 파일이다.
 - 나중에 할 구현 작업과 결정을 기다리는 작업은 `docs/BACKLOG.md`에 적는다. 미루거나 보류하기로 한 일은 그 자리에서 바로 적고, 끝나면 지우지 않고 `완료`로 바꾼다. 작업을 시작할 때 관련 항목이 있는지 먼저 본다.
 
 ## 설계 문서
@@ -27,6 +28,7 @@
 - 준비: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt`
 - 엔진 입력 만들기: `cd backend && ../.venv/bin/python scripts/build_engine_inputs.py` (공고 40,479 / 공고별 역량 120,186)
 - 공고 분석(P2 규칙 처리) 전량: `cd backend && ../.venv/bin/python scripts/analyze_postings.py` → `backend/data/derived/posting_analysis.jsonl`(git 밖, 약 3분, 63MB). 구절 목록은 파일에 없으니 필요하면 `posting_analysis.analyze()`로 다시 계산.
+- LLM(Bedrock)은 `careerlens/llm.py` 한 곳에서만 부른다. LLM 결과는 코드가 검사하고(`interview.quote_ok`·`safe_question`, 숫자 검사), 실패하면 None → 호출한 쪽이 규칙 대체를 쓴다. 시험은 `llm.converse`를 가짜로 바꿔 끼워 실제 호출 없이 돈다(`tests/test_api_interview.py`). 실제 연결 확인은 `AWS_PROFILE=tae ../.venv/bin/python scripts/smoke_llm.py`(호출 약 6번).
 - 서버: `cd backend && ../.venv/bin/uvicorn careerlens.api:app --reload` (준비 약 3.5초, 메모리 약 700MB). 단계별 API는 `careerlens/api.py`, 목록은 DESIGN.md 5절.
 - 시험: `cd backend && ../.venv/bin/pytest -q`. 로직팀 미해결 건은 `xfail(strict=True)`로 고정한다(고쳐지면 시험이 알려 줌).
 

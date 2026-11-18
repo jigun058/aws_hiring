@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from careerlens import cards as C
-from careerlens import courses, postings
+from careerlens import courses, interview as I, llm, postings
 from careerlens.posting_analysis import analyze
 from careerlens.recommend import Recommender, is_paid
 from common import TODAY
@@ -168,3 +168,182 @@ def course_plan(req: CoursesReq):
 def analyze_posting(req: AnalyzeReq):
     """⑥ 즉석 공고 분석(규칙). AI 보완(F2-5)은 다음 작업."""
     return analyze(dict(job_description_raw=req.text, occupation_id=req.occupation_id))
+
+
+# ---------------- ① 경험 수집 인터뷰 (P3) ----------------
+class InterviewStart(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+    title: Optional[str] = None
+    type: Optional[CardType] = None
+
+
+class InterviewAnswer(BaseModel):
+    card: dict
+    answer: str = Field(min_length=1, max_length=2000)
+
+
+def _comps_out(comps):
+    return [dict(kw_idx=k, keyword=C.D[k][1], category=C.D[k][0], **v) for k, v in sorted(comps.items(), key=lambda x: -C.RANK[x[1]['level']])]
+
+
+def _ask_next(card):
+    """다음 질문(코드가 고름) → LLM이 다듬음(실패·금지 주제면 기본 문장) → 질문 기록."""
+    q = I.next_question(card)
+    if q.get('end'):
+        card['status'] = 'generated'
+        card['last_question'] = None
+        return q
+    p = llm.phrase_question(q, card)
+    if p:
+        q = dict(q, question=I.safe_question(p['question'], q['question']), options=p['options'] or q['options'])
+    I.record_question(card, q)
+    card['last_question'] = q
+    return q
+
+
+def _interview_out(card, q):
+    comps = I.competencies(card)
+    return dict(card=card, question=q, competencies=_comps_out(comps),
+                card_in=dict(title=card['activity'], type=card['type'], text=I.card_text(card), paid=card['is_paid_work'],
+                             competencies=[dict(kw_idx=k, level=v['level'], match=v['match'], quote=v['quote']) for k, v in comps.items()]))
+
+
+@app.post('/api/interview/start')
+def interview_start(req: InterviewStart):
+    """경험 글 → 경험 카드 초안(여러 장일 수 있음)과 카드마다 첫 질문."""
+    text = I.mask_pii(req.text)
+    exps = llm.extract_experiences(text)
+    if not exps:   # LLM 실패 → 글 전체를 카드 하나로, 슬롯은 규칙으로
+        exps = [dict(activity=req.title or '내 경험', type=req.type or 'job', slots=I.rule_extract(text))]
+    out = []
+    for e in exps:
+        typ = req.type if (req.type and len(exps) == 1) else (e.get('type') if e.get('type') in llm.TYPES else 'job')
+        card = I.new_card(req.title if len(exps) == 1 and req.title else str(e.get('activity') or '내 경험')[:60], typ, text)
+        for x in e.get('slots') or []:
+            if isinstance(x, dict):
+                I.fill(card, x.get('slot'), x.get('value'), x.get('quote'), 'chat_0', is_estimate=bool(x.get('is_estimate')))
+        out.append(_interview_out(card, _ask_next(card)))
+    return dict(cards=out)
+
+
+@app.post('/api/interview/answer')
+def interview_answer(req: InterviewAnswer):
+    card = req.card
+    try:
+        q = card['last_question'] or {}
+        slot = q['slot']
+        source_id = f'chat_{len(card["sources"])}'
+    except (KeyError, TypeError):
+        raise HTTPException(400, '카드 형식이 올바르지 않거나 물어본 질문이 없어요')
+    answer = I.mask_pii(req.answer)
+    interp = llm.interpret_answer(slot, q.get('question', ''), answer) or I.rule_interpret(slot, answer)
+    filled = I.apply_answer(card, slot, answer, interp, source_id)
+    res = _interview_out(card, _ask_next(card))
+    res.update(filled=filled, other_experience=interp.get('kind') == 'other')
+    return res
+
+
+class ExplainReq(BaseModel):
+    job: dict
+
+
+@app.post('/api/explain')
+def explain(req: ExplainReq):
+    """③ 추천 이유 문장. 점수는 바꾸지 않는다. LLM이 실패하거나 규칙에 걸리면 코드가 만든 문장."""
+    j = req.job
+    try:
+        ev = [e for e in j['evidence'] if e.get('card')]
+        reason = llm.explain_job(j, j['evidence'])
+    except (KeyError, TypeError):
+        raise HTTPException(400, '직무 정보 형식이 올바르지 않아요')
+    if reason and not I.FORBIDDEN.search(reason):
+        return dict(reason=reason, by='ai')
+    names = ', '.join(e['keyword'] for e in ev[:2])
+    base = f'{j["name"]}에서 자주 찾는 역량 가운데 {names} 경험이 있어 추천했어요.' if names else f'{j["name"]}의 업무와 경험이 겹쳐 추천했어요.'
+    return dict(reason=base, by='rule')
+
+
+# ---------------- 에이전트 대화창 (DESIGN 5절): LLM이 도구 4개를 골라 부른다 ----------------
+class ChatMsg(BaseModel):
+    role: Literal['user', 'assistant']
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class ChatReq(BaseModel):
+    messages: list[ChatMsg] = Field(min_length=1, max_length=40)
+    step: Optional[str] = None                 # 화면의 지금 단계(예: '④ 채용공고')
+    cards: list[CardIn] = Field(default_factory=list, max_length=30)
+    occupation_id: Optional[str] = None
+    posting_id: Optional[str] = None
+
+
+_S = lambda props, req=(): {'json': {'type': 'object', 'properties': props, 'required': list(req)}}
+TOOLS = [
+    {'toolSpec': {'name': 'map_competencies', 'description': '문장 하나를 공통 역량 사전(182개)의 역량으로 바꾼다. 사용자가 새 경험을 말했을 때 어떤 역량인지 볼 때 쓴다.',
+                  'inputSchema': _S({'text': {'type': 'string'}}, ['text'])}},
+    {'toolSpec': {'name': 'recommend_jobs', 'description': '사용자의 경험 카드로 직무 TOP 3과 점수 구성, 근거 역량, 부족 역량을 계산한다.',
+                  'inputSchema': _S({})}},
+    {'toolSpec': {'name': 'search_postings', 'description': '한 직무의 채용공고를 찾는다. 필터: 시·도(서울/경기/인천), 시간제/전일제, 마감까지 남은 일수.',
+                  'inputSchema': _S({'occupation_id': {'type': 'string'}, 'sido': {'type': 'string'}, 'hours': {'type': 'string', 'enum': ['시간제', '전일제']},
+                                     'deadline_days': {'type': 'integer'}}, ['occupation_id'])}},
+    {'toolSpec': {'name': 'search_courses', 'description': '직무(또는 고른 공고)에서 부족한 역량을 채울 국비 교육과정을 찾는다.',
+                  'inputSchema': _S({'occupation_id': {'type': 'string'}, 'posting_id': {'type': 'string'}}, ['occupation_id'])}},
+]
+AGENT_SYSTEM = ('너는 CareerLens의 커리어 도우미다. 다시 일을 찾는 사람이 경험을 정리하고, 맞는 직무와 채용공고, 국비 교육과정을 찾도록 돕는다. '
+                '직무·공고·과정·점수에 관한 사실은 반드시 도구를 불러 얻은 결과만 말한다. 결과가 0건이면 0건이라고 말하고, 없는 공고나 과정을 지어내지 않는다. '
+                '점수는 합격 가능성이 아니라 경험과 직무가 겹치는 정도를 비교한 값이며, 네가 점수를 바꾸거나 새로 매기지 않는다. '
+                '공고는 서울시 일자리포털에 2026년 11월 12일 기준으로 올라온 수도권(서울·경기·인천) 공고다. '
+                '답은 3~5문장, "~해 볼 만합니다"처럼 단정하지 않는다. ' + llm.STYLE)
+
+
+def _tool(name, args, req):
+    cards = req.cards
+    if name == 'map_competencies':
+        kws, _ = C.tag_sentence(str(args.get('text', ''))[:500])
+        return dict(competencies=[dict(keyword=C.D[k][1], category=C.D[k][0], match=m) for k, m in kws.items()])
+    if not cards:
+        return dict(error='아직 저장한 경험 카드가 없어요. 경험을 먼저 입력해야 해요.')
+    if name == 'recommend_jobs':
+        r = recommend(CardsReq(cards=cards))
+        return dict(jobs=[dict(occupation_id=j['occupation_id'], name=j['name'], score=j['score'], evidence=[e['keyword'] for e in j['evidence']][:6],
+                               gaps=j['gaps'][:4], cautions=j['cautions'], open_postings=j['open_postings']) for j in r['jobs']])
+    oid = str(args.get('occupation_id') or req.occupation_id or '')
+    if name == 'search_postings':
+        f = PostingFilters(**{k: args[k] for k in ('sido', 'hours', 'deadline_days') if args.get(k) is not None})
+        r = job_postings(PostingsReq(cards=cards, occupation_id=oid, filters=f, limit=5))
+        return dict(total=r['total'], postings=[dict(company=p['company'], title=p['title'], region=f"{p['sido']} {p['sigungu']}", wage=p['wage'],
+                                                     d_day=p['d_day'], career=p['career'], has_required=[x['keyword'] for x in p['required'] if x['has']],
+                                                     missing_required=[x['keyword'] for x in p['required'] if not x['has']], needs_license=p['needs_license'],
+                                                     info_thin=p['thin']) for p in r['postings']])
+    if name == 'search_courses':
+        r = course_plan(CoursesReq(cards=cards, occupation_id=oid, posting_id=args.get('posting_id') or req.posting_id))
+        return dict(gaps=[dict(name=g['name'], label=g['label'], courses=[dict(name=c['name'], institution=c['institution'], start=c['start'],
+                                                                            fee=c['fee'], region=c['region']) for c in g['courses']]) for g in r['gaps']])
+    return dict(error=f'모르는 도구: {name}')
+
+
+@app.post('/api/chat')
+def chat(req: ChatReq):
+    ctx = f'지금 화면: {req.step or "알 수 없음"}. 경험 카드 {len(req.cards)}장.' + (f' 보고 있는 직무: {req.occupation_id}.' if req.occupation_id else '')
+    msgs = [{'role': m.role, 'content': [{'text': m.text}]} for m in req.messages]
+    used = []
+    try:
+        for _ in range(5):   # 도구 호출은 최대 4번, 다섯 번째는 답
+            resp = llm.converse(AGENT_SYSTEM + '\n' + ctx, msgs, 900, TOOLS)
+            out = resp['output']['message']
+            calls = [c['toolUse'] for c in out['content'] if 'toolUse' in c]
+            if resp.get('stopReason') != 'tool_use' or not calls:
+                return dict(reply=''.join(c.get('text', '') for c in out['content']).strip(), tools=used)
+            msgs.append(out)
+            results = []
+            for c in calls:
+                used.append(c['name'])
+                try:
+                    res = _tool(c['name'], c.get('input') or {}, req)
+                except HTTPException as e:
+                    res = dict(error=e.detail)
+                results.append({'toolResult': {'toolUseId': c['toolUseId'], 'content': [{'json': res}]}})
+            msgs.append({'role': 'user', 'content': results})
+    except Exception:   # Bedrock 오류·시간 초과: 상태 안내(DESIGN 5절)
+        return dict(reply='지금은 답을 드리기 어려워요. 잠시 뒤 다시 시도해 주세요.', tools=used, error=True)
+    return dict(reply='질문이 길어져 답을 정리하지 못했어요. 조금 더 짧게 물어봐 주시겠어요?', tools=used, error=True)
