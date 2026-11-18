@@ -27,6 +27,7 @@
 - 준비: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt`
 - 엔진 입력 만들기: `cd backend && ../.venv/bin/python scripts/build_engine_inputs.py` (공고 40,479 / 공고별 역량 120,186)
 - 공고 분석(P2 규칙 처리) 전량: `cd backend && ../.venv/bin/python scripts/analyze_postings.py` → `backend/data/derived/posting_analysis.jsonl`(git 밖, 약 3분, 63MB). 구절 목록은 파일에 없으니 필요하면 `posting_analysis.analyze()`로 다시 계산.
+- 서버: `cd backend && ../.venv/bin/uvicorn careerlens.api:app --reload` (준비 약 3.5초, 메모리 약 700MB). 단계별 API는 `careerlens/api.py`, 목록은 DESIGN.md 5절.
 - 시험: `cd backend && ../.venv/bin/pytest -q`. 로직팀 미해결 건은 `xfail(strict=True)`로 고정한다(고쳐지면 시험이 알려 줌).
 
 ## Git

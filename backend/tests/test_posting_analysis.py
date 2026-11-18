@@ -113,3 +113,8 @@ def test_preference_field_values_are_policy_or_conditions():
     r = A.analyze(dict(job_description_raw='창고 정리', preference_field_raw='(준)고령자(50세이상) / 고용허가제 / 차량소지자'))
     assert [c['type'] for c in r['conditions']] == ['정책 우대', '정책 우대', '자차']
     assert r['unmapped_requirements'] == []
+
+
+def test_recruit_count_is_condition():
+    r = A.analyze(dict(preferred_text='모집인원 : 1명'))
+    assert r['conditions'] == [dict(type='모집 인원', quote='모집인원 : 1명')] and r['unmapped_requirements'] == []

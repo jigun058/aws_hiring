@@ -24,6 +24,11 @@ TYPE_CONTEXT = {'job': '인턴·직무 경력', 'internship': '인턴·직무 �
 PAID = {'job', 'internship', 'part_time', 'self_employed'}
 
 
+def is_paid(cards):
+    """유급 근무 경험이 있는가(시뮬레이션 7번). 카드의 paid 값이 없으면 유형으로 판단."""
+    return any(c.get('paid', c['type'] in PAID) for c in cards)
+
+
 class Recommender(CareerMatcher):
     def __init__(self):
         super().__init__()
@@ -56,12 +61,13 @@ class Recommender(CareerMatcher):
                 card = self.extract(text)
             finally:
                 self._override = None
-        paid = any(c.get('paid', c['type'] in PAID) for c in cards)
+        paid = is_paid(cards)
         jobs = r['recommendations'][:n_jobs]
         for j in jobs:
-            j['postings'] = self.pick_postings(j['occupation_id'], set(card['keywords']), paid, n_posts)
+            j['postings'] = self.pick_postings(j['occupation_id'], set(card['keywords']), paid, n_posts) if n_posts else []
         return dict(jobs=jobs, more=r['more_candidates'], engine_card=r['experience_card'],
-                    context=card['context'], low_confidence=r['low_confidence'])
+                    context=card['context'], low_confidence=r['low_confidence'],
+                    user_keywords=sorted(set(card['keywords']) | set(levels)))
 
     def pick_postings(self, oid, user_kws, paid, n=6):
         seen, keep = set(), []
