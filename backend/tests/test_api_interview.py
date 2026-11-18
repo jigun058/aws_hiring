@@ -89,3 +89,10 @@ def test_chat_bedrock_down(client, monkeypatch):
     monkeypatch.setattr(llm, 'converse', fake([RuntimeError('down')]))
     r = client.post('/api/chat', json=dict(messages=[dict(role='user', text='안녕하세요')])).json()
     assert r['error'] and '다시 시도' in r['reply']
+
+
+def test_agent_tool_accepts_occupation_name():
+    from careerlens.api import _resolve_occ
+    assert _resolve_occ('OCC0410') == 'OCC0410'
+    assert _resolve_occ('요양보호사') == 'OCC0410'
+    assert _resolve_occ('없는 직무') == '없는 직무'

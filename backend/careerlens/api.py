@@ -3,6 +3,7 @@
 로그인이 없어 서버는 사용자 상태를 들고 있지 않는다. 화면이 경험 카드를 들고 있다가 매 요청에 함께 보낸다.
 (경험 카드 저장(DynamoDB)과 에이전트 대화는 다음 작업)
 """
+import re
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -284,16 +285,29 @@ TOOLS = [
     {'toolSpec': {'name': 'recommend_jobs', 'description': '사용자의 경험 카드로 직무 TOP 3과 점수 구성, 근거 역량, 부족 역량을 계산한다.',
                   'inputSchema': _S({})}},
     {'toolSpec': {'name': 'search_postings', 'description': '한 직무의 채용공고를 찾는다. 필터: 시·도(서울/경기/인천), 시간제/전일제, 마감까지 남은 일수.',
-                  'inputSchema': _S({'occupation_id': {'type': 'string'}, 'sido': {'type': 'string'}, 'hours': {'type': 'string', 'enum': ['시간제', '전일제']},
+                  'inputSchema': _S({'occupation_id': {'type': 'string', 'description': '직무 번호(OCC로 시작) 또는 직무 이름'}, 'sido': {'type': 'string'}, 'hours': {'type': 'string', 'enum': ['시간제', '전일제']},
                                      'deadline_days': {'type': 'integer'}}, ['occupation_id'])}},
     {'toolSpec': {'name': 'search_courses', 'description': '직무(또는 고른 공고)에서 부족한 역량을 채울 국비 교육과정을 찾는다.',
-                  'inputSchema': _S({'occupation_id': {'type': 'string'}, 'posting_id': {'type': 'string'}}, ['occupation_id'])}},
+                  'inputSchema': _S({'occupation_id': {'type': 'string', 'description': '직무 번호(OCC로 시작) 또는 직무 이름'}, 'posting_id': {'type': 'string'}}, ['occupation_id'])}},
 ]
 AGENT_SYSTEM = ('너는 CareerLens의 커리어 도우미다. 다시 일을 찾는 사람이 경험을 정리하고, 맞는 직무와 채용공고, 국비 교육과정을 찾도록 돕는다. '
                 '직무·공고·과정·점수에 관한 사실은 반드시 도구를 불러 얻은 결과만 말한다. 결과가 0건이면 0건이라고 말하고, 없는 공고나 과정을 지어내지 않는다. '
                 '점수는 합격 가능성이 아니라 경험과 직무가 겹치는 정도를 비교한 값이며, 네가 점수를 바꾸거나 새로 매기지 않는다. '
                 '공고는 서울시 일자리포털에 2026년 11월 12일 기준으로 올라온 수도권(서울·경기·인천) 공고다. '
-                '답은 3~5문장, "~해 볼 만합니다"처럼 단정하지 않는다. ' + llm.STYLE)
+                '도구 결과의 d_day(마감까지 남은 날)는 2026년 11월 12일 기준이다. "마감까지 n일 남았다", "서두르라"고 말하지 않고, 필요하면 "11월 12일 기준 D-n"이라고 쓴다. '
+                '답은 대화창에 들어가는 3~5문장의 평범한 글이다. 표, 굵은 글씨, 이모지를 쓰지 않는다. 공고를 소개할 때는 3건까지 회사·지역·급여만 한 줄씩. '
+                '"부담 없이 지원하실 수 있어요", "~해 볼 만합니다"처럼 단정하거나 권하지 않는다. ' + llm.STYLE)
+
+
+def _resolve_occ(x):
+    """에이전트는 직무 번호 대신 이름을 넣기도 한다. 번호 → 그대로, 이름이 정확히 같거나 한 직무에만 들어 있으면 그 번호."""
+    if x in R.occ_idx:
+        return x
+    names = R.occ.set_index('occupation_id').occupation_name
+    hit = names[names == x]
+    if hit.empty:
+        hit = names[names.str.contains(re.escape(x))] if x else hit
+    return hit.index[0] if len(hit) == 1 else x
 
 
 def _tool(name, args, req):
@@ -307,7 +321,7 @@ def _tool(name, args, req):
         r = recommend(CardsReq(cards=cards))
         return dict(jobs=[dict(occupation_id=j['occupation_id'], name=j['name'], score=j['score'], evidence=[e['keyword'] for e in j['evidence']][:6],
                                gaps=j['gaps'][:4], cautions=j['cautions'], open_postings=j['open_postings']) for j in r['jobs']])
-    oid = str(args.get('occupation_id') or req.occupation_id or '')
+    oid = _resolve_occ(str(args.get('occupation_id') or req.occupation_id or ''))
     if name == 'search_postings':
         f = PostingFilters(**{k: args[k] for k in ('sido', 'hours', 'deadline_days') if args.get(k) is not None})
         r = job_postings(PostingsReq(cards=cards, occupation_id=oid, filters=f, limit=5))
