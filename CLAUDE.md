@@ -26,6 +26,7 @@
 - 큰 데이터(`backend/data/careerlens.db`, `courses.json`)와 엔진 입력(`backend/vendor/engine/out|work/`)은 git 밖이다. 원본은 `docs/context/assets/drive/`.
 - 준비: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt`
 - 엔진 입력 만들기: `cd backend && ../.venv/bin/python scripts/build_engine_inputs.py` (공고 40,479 / 공고별 역량 120,186)
+- 공고 분석(P2 규칙 처리) 전량: `cd backend && ../.venv/bin/python scripts/analyze_postings.py` → `backend/data/derived/posting_analysis.jsonl`(git 밖, 약 3분, 63MB). 구절 목록은 파일에 없으니 필요하면 `posting_analysis.analyze()`로 다시 계산.
 - 시험: `cd backend && ../.venv/bin/pytest -q`. 로직팀 미해결 건은 `xfail(strict=True)`로 고정한다(고쳐지면 시험이 알려 줌).
 
 ## Git

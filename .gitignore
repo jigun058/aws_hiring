@@ -8,3 +8,4 @@ backend/data/courses.json
 backend/vendor/engine/out/
 backend/vendor/engine/work/
 docs/design/uploads/
+backend/data/derived/
