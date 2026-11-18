@@ -3,3 +3,8 @@ node_modules/
 __pycache__/
 .venv/
 .env
+backend/data/careerlens.db
+backend/data/courses.json
+backend/vendor/engine/out/
+backend/vendor/engine/work/
+docs/design/uploads/

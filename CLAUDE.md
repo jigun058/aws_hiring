@@ -9,10 +9,24 @@
 - 명세가 비어 있거나 서로 어긋나면 임의로 정하지 말고 사용자에게 알린다.
 - 코드 밖의 일(팀원에게 전달·부탁할 것, 대회 측에 확인할 것, 발표 담당에게 넘길 기술 자료)은 `docs/TEAM.md`에서 관리한다. 작업 중 그런 일이 생기면 바로 거기에 적고, 끝난 항목은 지우지 말고 상태를 `완료`로 바꾼다.
 
+- 나중에 할 구현 작업과 결정을 기다리는 작업은 `docs/BACKLOG.md`에 적는다. 미루거나 보류하기로 한 일은 그 자리에서 바로 적고, 끝나면 지우지 않고 `완료`로 바꾼다. 작업을 시작할 때 관련 항목이 있는지 먼저 본다.
+
 ## 설계 문서
 
 - `docs/DESIGN.md`: 어떤 기능을 어떤 로직으로 만드는지 팀원에게 설명하는 문서. 비개발자인 팀원이 읽는다. **로직·범위·일정이 바뀌면 코드와 같은 작업 안에서 이 문서도 고치고**, "바뀐 결정 기록"에 한 줄 남긴다. `[기본값]` 표시는 명세가 없어 임시로 정한 규칙이다.
 - 구현 범위, 기술 구성, 일정, 우선순위의 기준은 이 문서다.
+
+## 코드 구조와 명령
+
+- `backend/vendor/`: 로직팀 코드 원본(엔진 `engine/src/`, P1 참조 구현 `p1/`). **수정 금지**. 바꿀 동작은 `backend/careerlens/`에서 감싼다.
+- `backend/careerlens/paths.py`: vendor 코드는 import할 때 환경 변수로 DB를 열고 형제 모듈을 최상위 이름으로 import한다. 그래서 vendor 모듈보다 이 모듈을 먼저 import한다. 우리 모듈 이름을 `common`, `knowledge` 등 vendor와 겹치게 짓지 않는다.
+- `backend/careerlens/experience_rules.py`: 경험 규칙 보정본(엔진·경험 카드 공용).
+- `backend/careerlens/cards.py`: 문장 → 역량·근거 등급(시뮬레이션 07의 카드 코드). `recommend.py`: 엔진을 상속한 `Recommender`(시뮬레이션 6·7·8번, 경험 종류 보정). 엔진 준비 약 1.5초, 추천 한 번 약 0.15초.
+- 화면 시안: `docs/design/CareerLens v2.dc.html`이 최종본(사용자가 Claude Design으로 수정을 거친 것). `CareerLens.dc.html`은 이전 판. `docs/design/uploads/`(참고 캡처)는 git 밖.
+- 큰 데이터(`backend/data/careerlens.db`, `courses.json`)와 엔진 입력(`backend/vendor/engine/out|work/`)은 git 밖이다. 원본은 `docs/context/assets/drive/`.
+- 준비: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt`
+- 엔진 입력 만들기: `cd backend && ../.venv/bin/python scripts/build_engine_inputs.py` (공고 40,479 / 공고별 역량 120,186)
+- 시험: `cd backend && ../.venv/bin/pytest -q`. 로직팀 미해결 건은 `xfail(strict=True)`로 고정한다(고쳐지면 시험이 알려 줌).
 
 ## Git
 
