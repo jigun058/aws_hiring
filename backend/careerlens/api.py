@@ -212,6 +212,7 @@ class InterviewStart(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
     title: Optional[str] = None
     type: Optional[CardType] = None
+    from_file: bool = False   # 올린 파일의 글이면 원문 id가 file_0 → 대화 답과 다르면 5.3 ③으로 묻는다
 
 
 class InterviewAnswer(BaseModel):
@@ -230,7 +231,7 @@ def _ask_next(card):
         card['status'] = 'generated'
         card['last_question'] = None
         return q
-    p = llm.phrase_question(q, card)
+    p = llm.phrase_question(q, card) if q['kind'] != 'conflict' else None   # ③은 선택지가 두 값 그대로여야 한다
     if p:
         q = dict(q, question=I.safe_question(p['question'], q['question']), options=p['options'] or q['options'])
     I.record_question(card, q)
@@ -284,19 +285,19 @@ def interview_start(req: InterviewStart):
     made_by = 'ai' if exps else 'rule'   # 화면이 "AI 초안"을 붙일지 정한다
     if not exps:   # LLM 실패 → 글 전체를 카드 하나로, 슬롯은 규칙으로
         exps = [dict(activity=req.title or '내 경험', type=req.type or 'job', slots=I.rule_extract(text))]
-    out = []
+    out, sid = [], 'file_0' if req.from_file else 'chat_0'
     for e in exps:
         typ = req.type if (req.type and len(exps) == 1) else (e.get('type') if e.get('type') in llm.TYPES else 'job')
-        card = I.new_card(req.title if len(exps) == 1 and req.title else str(e.get('activity') or '내 경험')[:60], typ, text)
+        card = I.new_card(req.title if len(exps) == 1 and req.title else str(e.get('activity') or '내 경험')[:60], typ, text, sid)
         card['made_by'] = made_by
         for x in e.get('slots') or []:
             if isinstance(x, dict):
-                I.fill(card, x.get('slot'), x.get('value'), x.get('quote'), 'chat_0', is_estimate=bool(x.get('is_estimate')))
+                I.fill(card, x.get('slot'), x.get('value'), x.get('quote'), sid, is_estimate=bool(x.get('is_estimate')))
         if typ == 'certificate' and not card['slots']['actions']:   # 자격증 글을 화면에서 고칠 수 있게 '행동' 칸에 넣는다
             # 경험이 여럿인 글(이력서)이면 이 카드의 인용만. 글 전체를 넣으면 다른 경험의 역량이 자격증 카드에 붙는다
             quotes = [x.get('quote') for x in e.get('slots') or [] if isinstance(x, dict) and I.quote_ok(x.get('quote'), text)]
             for s in dict.fromkeys(quotes) if len(exps) > 1 else I.sentences(text):
-                I.fill(card, 'actions', s, s, 'chat_0')
+                I.fill(card, 'actions', s, s, sid)
         out.append(_interview_out(card, _ask_next(card)))
     return dict(cards=out)
 
@@ -311,6 +312,11 @@ def interview_answer(req: InterviewAnswer):
     except (KeyError, TypeError):
         raise HTTPException(400, '카드 형식이 올바르지 않거나 물어본 질문이 없어요')
     answer = I.mask_pii(req.answer)
+    if q.get('kind') == 'conflict' and any(c['status'] == 'open' for c in card.get('conflicts', [])):
+        I.resolve_conflict(card, answer, source_id)
+        res = _interview_out(card, _ask_next(card))
+        res.update(filled=[slot], other_experience=False)
+        return res
     interp = llm.interpret_answer(slot, q.get('question', ''), answer) or I.rule_interpret(slot, answer)
     filled = I.apply_answer(card, slot, answer, interp, source_id)
     res = _interview_out(card, _ask_next(card))

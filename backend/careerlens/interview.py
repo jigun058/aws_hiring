@@ -91,8 +91,11 @@ def fill(card, slot, value, quote, source_id, by='ai_extracted', is_estimate=Fal
         if any(_norm(x['quote']) == _norm(quote) for x in card['slots'][slot]):
             return True
         card['slots'][slot].append(item)
+        _check_conflict(card, slot, item)
         vague = all(is_vague(slot, x['value']) for x in card['slots'][slot])
     else:
+        if _check_conflict(card, slot, item):
+            return True   # 지금 값은 그대로 두고 5.3 ③에서 어느 쪽이 맞는지 묻는다
         card['slots'][slot] = item
         vague = is_vague(slot, value)
     if card['slot_status'].get(slot) != 'not_asked':
@@ -122,7 +125,12 @@ def next_question(card):
             if st[s] == want and _asked(card, s) < 2:
                 q, opts, _ = BANK[s]
                 return dict(slot=s, kind='basic', question=q, options=opts)
-    # ③ 자료·진술 불일치: 파일 업로드가 붙으면 넣는다. ④ 등급 올리기: 트랙 B는 희망 직무가 없어 건너뜀(P3 F3-2 선택 입력)
+    c = next((c for c in card.get('conflicts', []) if c['status'] == 'open'), None)
+    if c:   # ③ 자료·진술 불일치 → 어느 쪽이 맞는지
+        f, t = c['file']['value'], c['talk']['value']
+        return dict(slot=c['slot'], kind='conflict', options=[f, t],
+                    question=f'올려 주신 자료에는 ‘{f}’, 말씀하신 내용에는 ‘{t}’(으)로 되어 있어요. 어느 쪽이 맞나요?')
+    # ④ 등급 올리기: 트랙 B는 희망 직무가 없어 건너뜀(P3 F3-2 선택 입력)
     res = card['slots']['results']
     if st['results'] == 'filled' and res and not any(re.search(r'\d', r['value']) for r in res) and not _asked(card, 'results', 'number'):
         q, opts, _ = BANK['results_number']   # ⑤ 정성 성과의 수치, 1회만
@@ -174,6 +182,78 @@ def apply_answer(card, slot, answer, interpretation, source_id):
     return []
 
 
+# P3 5.3 ③: 같은 칸에 파일(자료)과 대화·고친 글(진술)의 값이 다르면 묻는다. 기간·역할·팀 규모와 성과의 수치만 본다.
+# [기본값] 다름의 기준: 숫자가 있으면 한쪽 숫자들이 다른 쪽에 다 들어 있지 않을 때, 없으면 한쪽 글이 다른 쪽을 품지 않을 때.
+# 성과는 '같은 대상(앞 낱말 두 글자) + 같은 단위'의 숫자가 다를 때만(예: 매출 20% / 매출 30%).
+CONFLICT_SLOTS = ('role', 'period', 'team_size', 'results')
+_METRIC = re.compile(r'([가-힣A-Za-z]{2})[가-힣A-Za-z]*\s*(?:약|대략|한)?\s*(\d[\d,.]*)\s*(%|퍼센트|명|건|개|원|만\s?원|억|시간|분|일|배|회|곳|점)')
+
+
+def _from_file(item):
+    return str(item.get('source') or '').startswith('file_')
+
+
+def _differs(a, b):
+    na, nb = set(re.findall(r'\d+', a)), set(re.findall(r'\d+', b))
+    if na and nb:
+        return not (na <= nb or nb <= na)
+    a, b = _norm(a), _norm(b)
+    return a not in b and b not in a
+
+
+def _metrics(v):
+    return {(m.group(1), m.group(3).replace(' ', '')): m.group(2).replace(',', '') for m in _METRIC.finditer(v)}
+
+
+def _check_conflict(card, slot, item):
+    """새 값이 다른 출처의 지금 값과 다르면 불일치로 적는다. → 적었는가"""
+    if slot not in CONFLICT_SLOTS or item.get('by') == 'system':
+        return False
+    cur = card['slots'][slot]
+    for x in (cur if isinstance(cur, list) else [cur] if cur else []):
+        if x is item or _from_file(x) == _from_file(item) or x.get('by') == 'system':
+            continue
+        if slot == 'results':
+            mx, mi = _metrics(x['value']), _metrics(item['value'])
+            hit = any(k in mx and mx[k] != v for k, v in mi.items())
+        else:
+            hit = not is_vague(slot, x['value']) and _differs(x['value'], item['value'])
+        if hit:
+            f, t = (x, item) if _from_file(x) else (item, x)
+            card.setdefault('conflicts', []).append(dict(slot=slot, file=f, talk=t, status='open'))
+            return True
+    return False
+
+
+def resolve_conflict(card, answer, source_id):
+    """③ 질문의 답. 선택지(자료 값·진술 값)나 '자료가 맞아요'류 → 그 값. 모름·건너뛰기 → 지금 값 그대로. 그 밖 → 답을 새 값으로."""
+    c = next(c for c in card['conflicts'] if c['status'] == 'open')
+    card['sources'][source_id] = a = mask_pii(answer)
+    r = rule_interpret(c['slot'], a)
+    if r['kind'] == 'stop':
+        card['stopped'] = True
+        return
+    na = _norm(a)
+    digits = lambda v: set(re.findall(r'\d+', v))   # noqa: E731  '30%예요'처럼 숫자만 답해도 고른다
+    hit = [k for k in ('file', 'talk') if _norm(c[k]['value']) in na or digits(a) and digits(a) == digits(c[k]['value'])]
+    if len(hit) != 1:
+        hit = ['file'] if re.search(r'자료|파일|서류|이력서', a) else ['talk'] if re.search(r'말씀|말한|제 ?말|대화', a) else []
+    slot = c['slot']
+    if hit:
+        win, c['status'] = c[hit[0]], hit[0]
+    elif r['kind'] == 'content':
+        win, c['status'] = dict(value=a, quote=a, source=source_id, by='user_answer', is_estimate=False), 'new'
+    else:
+        c['status'] = 'unknown'
+        return
+    if slot in LIST_SLOTS:
+        drop = {_norm(c['file']['quote']), _norm(c['talk']['quote'])}
+        card['slots'][slot] = [x for x in card['slots'][slot] if _norm(x['quote']) not in drop] + [win]
+    else:
+        card['slots'][slot] = win
+    card['slot_status'][slot] = 'filled'
+
+
 EDITABLE = ('activity', 'type', 'period', 'role', 'purpose', 'actions', 'results')
 
 
@@ -189,6 +269,9 @@ def edit(card, field, value):
         return
     sid = f'edit_{field}'
     card['sources'][sid] = value
+    for c in card.get('conflicts', []):   # 사용자가 칸을 직접 고쳤으면 묻지 않는다
+        if c['slot'] == field and c['status'] == 'open':
+            c['status'] = 'edited'
     if field in LIST_SLOTS:
         card['slots'][field] = [dict(value=s, quote=s, source=sid, by='user', is_estimate=False)
                                 for s in (x.strip() for x in value.splitlines()) if s]
@@ -229,6 +312,8 @@ def merge(a, b):
             new += '_m'   # 'edit_' 앞머리는 그대로 둔다(card_text가 본다)
         m['sources'][new] = text
         ren[sid] = new
+    m.setdefault('conflicts', []).extend(dict(c, **{k: dict(c[k], source=ren.get(c[k]['source'], c[k]['source'])) for k in ('file', 'talk')})
+                                         for c in b.get('conflicts', []))
     for slot, v in b['slots'].items():
         if slot not in m['slots']:
             continue
@@ -240,8 +325,11 @@ def merge(a, b):
             if isinstance(cur, list):
                 if not any(_norm(y['quote']) == _norm(x['quote']) for y in cur):
                     cur.append(x)
+                    _check_conflict(m, slot, x)
             elif not cur or cur.get('by') == 'system':
                 m['slots'][slot] = x
+            else:
+                _check_conflict(m, slot, x)
     for slot, st in b['slot_status'].items():
         if st == 'filled' and m['slot_status'].get(slot) not in ('filled', 'not_asked'):
             m['slot_status'][slot] = 'filled'

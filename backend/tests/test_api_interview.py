@@ -250,3 +250,50 @@ def test_chat_stream_bedrock_down(client, monkeypatch):
     monkeypatch.setattr(llm, 'converse_stream', down)
     r = client.post('/api/chat/stream', json=dict(messages=[dict(role='user', text='안녕')]))
     assert [json.loads(x) for x in r.text.splitlines()] == [{'error': '지금은 답을 드리기 어려워요. 잠시 뒤 다시 시도해 주세요.'}]
+
+
+def test_file_and_answer_disagree_asks_which_is_right(client, monkeypatch):
+    """P3 5.3 ③: 파일(자료)의 기간과 대화 답의 기간이 다르면 덮어쓰지 않고, 핵심 빈칸 다음에 어느 쪽이 맞는지 묻는다."""
+    text = '○○상사 경리 담당. 2015년부터 2020년까지 근무. 장부와 급여를 엑셀로 정리했습니다.'
+    monkeypatch.setattr(llm, 'converse', fake([
+        {'experiences': [{'activity': '○○상사 경리', 'type': 'job', 'slots': [
+            {'slot': 'role', 'value': '경리 담당', 'quote': '경리 담당'},
+            {'slot': 'period', 'value': '2015~2020년', 'quote': '2015년부터 2020년까지'},
+            {'slot': 'actions', 'value': '장부·급여 엑셀 정리', 'quote': '장부와 급여를 엑셀로 정리했습니다'}]}]},
+        RuntimeError('phrase down'),
+        {'kind': 'content', 'slots': [{'slot': 'results', 'value': '월말 마감 하루 단축', 'quote': '월말 마감을 하루 줄였어요'},
+                                      {'slot': 'period', 'value': '2017~2020년', 'quote': '2017년부터 2020년까지'}]},
+    ]))
+    c = client.post('/api/interview/start', json=dict(text=text, from_file=True)).json()['cards'][0]
+    assert c['card']['slots']['period']['source'] == 'file_0' and c['question']['slot'] == 'results'
+    a = client.post('/api/interview/answer', json=dict(card=c['card'], answer='2017년부터 2020년까지 다니면서 월말 마감을 하루 줄였어요')).json()
+    q = a['question']
+    assert q['kind'] == 'conflict' and q['slot'] == 'period' and q['options'] == ['2015~2020년', '2017~2020년']
+    assert a['card']['slots']['period']['value'] == '2015~2020년'   # 묻기 전에는 자료 값 그대로
+    r = client.post('/api/interview/answer', json=dict(card=a['card'], answer='2017~2020년')).json()
+    assert r['card']['slots']['period']['value'] == '2017~2020년' and r['card']['conflicts'][0]['status'] == 'talk'
+    assert r['question'].get('kind') != 'conflict'
+
+
+def test_merge_file_and_chat_cards_with_different_numbers():
+    """파일 카드와 대화 카드를 합칠 때 같은 성과의 숫자가 다르면 묻는다. 숫자만 답해도 고르고, 진 쪽은 지운다. 다른 대상의 숫자는 묻지 않는다."""
+    from careerlens import interview as I
+    a = I.new_card('마트 근무', 'job', '발주를 맡아 재고 손실을 20% 줄였습니다.', 'file_0')
+    I.fill(a, 'results', '재고 손실 20% 감소', '재고 손실을 20% 줄였습니다', 'file_0')
+    b = I.new_card('마트 계산원', 'job', '재고 손실을 30% 정도 줄였고 손님이 하루 200명 왔어요')
+    I.fill(b, 'results', '재고 손실 30% 감소', '재고 손실을 30% 정도 줄였고', 'chat_0')
+    I.fill(b, 'results', '하루 손님 200명', '손님이 하루 200명 왔어요', 'chat_0')
+    m = I.merge(a, b)
+    assert [c['slot'] for c in m['conflicts']] == ['results']
+    q = I.next_question(m)
+    assert q['kind'] == 'conflict' or m['slot_status']['role'] == 'missing'   # ①이 먼저
+    I.resolve_conflict(m, '30%예요', 'chat_9')
+    assert [x['value'] for x in m['slots']['results']] == ['하루 손님 200명', '재고 손실 30% 감소']
+    # 사용자가 칸을 직접 고치면 묻지 않는다
+    c = I.new_card('경리', 'job', '2015년부터 근무', 'file_0')
+    I.fill(c, 'period', '2015년~', '2015년부터', 'file_0')
+    c['sources']['chat_1'] = '2018년부터요'
+    I.fill(c, 'period', '2018년~', '2018년부터요', 'chat_1')
+    assert c['conflicts'][0]['status'] == 'open'
+    I.edit(c, 'period', '2016년부터')
+    assert c['conflicts'][0]['status'] == 'edited'

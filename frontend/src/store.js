@@ -206,7 +206,7 @@ export function upload(fileList) {
         const small = PHOTO.test(f.name) ? await shrink(f).catch(() => null) : null   // 줄이기 실패 → 원본 그대로(형식은 서버가 내용으로 판단)
         const r = await api('files/read', { name: f.name, data: await b64(small || f) })
         set({ typing: `‘${f.name}’ 파일에서 경험을 찾는 중이에요…` })
-        news.push(...await startCards(r.text))
+        news.push(...await startCards(r.text, { from_file: true }))
         read.push(`‘${f.name}’${r.truncated ? '(글이 길어 앞부분 5,000자만)' : ''}`)
       } catch (e) {
         say(e.message.startsWith(f.name) ? e.message : `${f.name}: ${e.message}`, { error: true })
