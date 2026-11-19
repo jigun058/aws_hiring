@@ -9,7 +9,9 @@ from careerlens.experience_rules import card_rules
 from careerlens.paths import DICT_CSV
 import p1_engine as E
 
-D = {int(r['kw_idx']): (r['분류코드'], r['키워드']) for r in csv.DictReader(open(DICT_CSV, encoding='utf-8-sig'))}
+_ROWS = list(csv.DictReader(open(DICT_CSV, encoding='utf-8-sig')))
+D = {int(r['kw_idx']): (r['분류코드'], r['키워드']) for r in _ROWS}
+DEF = {int(r['kw_idx']): r['정의'] for r in _ROWS}
 EXR = card_rules()
 RANK = {'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3}
 
@@ -68,3 +70,21 @@ def best_levels(cards):
             if name not in best or RANK[v['level']] > RANK[best[name]]:
                 best[name] = v['level']
     return best
+
+
+# P3 4.1 ② 후보: 규칙으로 못 잡은 문장과 비슷한 사전 역량 n개. [기본값] 새 임베딩 대신 엔진과 같은 글자 단위 TF-IDF(DESIGN 3절).
+# 태도(C4)·신체(C5)는 점수에 안 쓰므로 후보에서 뺀다.
+_cand = None
+
+
+def candidates(sentence, n=5):
+    global _cand
+    if _cand is None:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        rows = [r for r in _ROWS if r['분류코드'] not in ('C4', 'C5')]
+        docs = [' '.join([r['키워드'], r['정의'], r['국문_별칭'].replace('|', ' ')]) for r in rows]
+        vec = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4), sublinear_tf=True)
+        _cand = ([int(r['kw_idx']) for r in rows], vec, vec.fit_transform(docs))
+    ids, vec, m = _cand
+    sim = (m @ vec.transform([sentence]).T).toarray().ravel()
+    return [ids[i] for i in sim.argsort()[::-1][:n] if sim[i] > 0]

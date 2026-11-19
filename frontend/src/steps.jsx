@@ -176,13 +176,14 @@ export function Step2({ s }) {
                   <div className="flex items-center gap-4">
                     <div className="flex-1 min-w-0 flex items-baseline gap-x-3.5 gap-y-1 flex-wrap">
                       <span className="text-[19px] font-extrabold text-ink">{k.keyword}</span><Grade lv={k.level} />
+                      {k.match === 'llm_choice' && <span className="inline-flex items-center gap-1.5 break-keep text-[14px] font-bold text-ai"><AiDot size={9} />AI가 고른 후보 · 아직 점수에 넣지 않아요</span>}
                     </div>
                     <div className="shrink-0 flex gap-2">
                       <Btn kind={open[k.kw_idx] ? 'outline' : 'plain'} size="sm" className={open[k.kw_idx] ? '' : 'text-brand'} onClick={() => setOpen(o => ({ ...o, [k.kw_idx]: !o[k.kw_idx] }))}>{open[k.kw_idx] ? '근거 접기 ▴' : '근거 보기 ▾'}</Btn>
                       <Btn kind="plain" size="sm" className="text-sub hover:border-err hover:text-err" onClick={() => removeComp(c.id, k.kw_idx)}>지우기</Btn>
                     </div>
                   </div>
-                  {open[k.kw_idx] && <span className="text-[17px] text-ink leading-[1.6]">“{k.quote}”</span>}
+                  {open[k.kw_idx] && <span className="text-[17px] text-ink leading-[1.6]">“{k.quote}”{k.reason && <span className="block text-[16px] text-sub mt-1">AI가 고른 이유: {k.reason}</span>}</span>}
                 </div>
               )) : <div className="py-6 text-[17px] text-sub">아직 찾은 역량이 없어요. 행동·성과 칸에 하신 일을 적어 주시면 다시 찾아요.</div>}
             </div>

@@ -182,3 +182,71 @@ def test_chat_told_cards_and_how_to_fix_them(client, monkeypatch):
     card = dict(title='자격증', type='certificate', text='지게차운전기능사 자격증을 보유하고 있습니다.')
     client.post('/api/chat', json=dict(messages=[dict(role='user', text='사실 나 지게차 자격증 없어')], step='③ 직무 추천', cards=[card]))
     assert '지게차운전기능사 자격증을 보유' in seen['system'] and '이 카드 지우기' in seen['system']
+
+
+def test_similar_cards_share_merge_key_and_merge_keeps_both(client, monkeypatch):
+    """P3 1절: 이력서 PDF와 자격증 사진에서 같은 자격증 카드가 2장 생기면 같은 키 → 화면이 합치기를 제안. 합치면 두 원문이 다 남는다."""
+    monkeypatch.setattr(llm, 'converse', fake([RuntimeError('down')] * 20))
+    a = client.post('/api/interview/start', json=dict(text='지게차운전기능사 (2014)', type='certificate')).json()['cards'][0]
+    b = client.post('/api/interview/start', json=dict(text='국가기술자격증 자격종목: 지게차운전기능사 취득일: 2014년 5월', type='certificate')).json()['cards'][0]
+    c = client.post('/api/interview/start', json=dict(text='컴퓨터활용능력 2급 자격증', type='certificate')).json()['cards'][0]
+    assert a['merge_keys'] == b['merge_keys'] == ['lic:지게차운전기능사'] and c['merge_keys'] != a['merge_keys']
+    j1 = client.post('/api/interview/start', json=dict(text='물류센터에서 5년 일했어요', title='○○ 물류센터 재고 관리', type='job')).json()['cards'][0]
+    j2 = client.post('/api/interview/start', json=dict(text='물류센터에서 지게차를 탔어요', title='물류센터 근무', type='job')).json()['cards'][0]
+    assert j1['merge_keys'] == j2['merge_keys'] == ['w:물류센터']
+    m = client.post('/api/interview/merge', json=dict(a=a['card'], b=b['card'])).json()
+    assert m['card']['activity'] == a['card']['activity'] and len(m['card']['sources']) == 2
+    assert {x['value'] for x in m['card']['slots']['actions']} >= {'지게차운전기능사 (2014)'} and len(m['card']['slots']['actions']) >= 2
+    rec = client.post('/api/recommend', json=dict(cards=[m['card_in'], j1['card_in']])).json()
+    assert rec['jobs']
+
+
+def test_llm_closed_choice_only_from_candidates_and_not_scored(client, monkeypatch):
+    """P3 4.1 ②: 규칙이 못 잡은 행동 문장만 후보 중에서 AI가 고른다. 후보 밖 번호는 버리고, 고른 것은 점수에 넣지 않는다."""
+    from careerlens import cards as C
+    s1, s2 = '손님들 머리를 자르고 염색을 해 드렸어요.', '화단에 꽃을 심었어요.'
+    c1, c2 = C.candidates(s1), C.candidates(s2)
+    outside = next(k for k in C.D if k not in c2)
+    monkeypatch.setattr(llm, 'converse', fake([
+        {'experiences': [{'activity': '미용실 근무', 'type': 'job', 'slots': [
+            {'slot': 'actions', 'value': '머리 손질', 'quote': '손님들 머리를 자르고 염색을 해 드렸어요'},
+            {'slot': 'actions', 'value': '꽃 심기', 'quote': '화단에 꽃을 심었어요'}]}]},
+        RuntimeError('phrase down'),
+        {'choices': [{'id': 0, 'kw': c1[0], 'reason': '손님을 맞아 요청대로 해 드림'}, {'id': 1, 'kw': outside, 'reason': '후보 밖'}]},
+    ]))
+    r = client.post('/api/interview/start', json=dict(text=s1 + ' ' + s2)).json()['cards'][0]
+    ai = [k for k in r['competencies'] if k['match'] == 'llm_choice']
+    assert [(k['kw_idx'], k['quote']) for k in ai] == [(c1[0], s1)] and ai[0]['reason']
+    assert r['card']['llm_choices'][s2] == [None, None]
+    from careerlens.api import CardIn, _internal
+    assert c1[0] not in _internal([CardIn(**r['card_in'])])[0]['comps']   # 점수에 쓰는 카드 등급에 들어가지 않음
+
+
+def test_chat_stream_sends_pieces_tools_and_hides_ids(client, monkeypatch):
+    """B27: 답을 조각으로 흘려보낸다. 도구를 부르면 그 이름을 먼저 알리고, 조각 사이에 걸친 직무 번호도 지운다."""
+    calls = []
+
+    def stream(system, messages, max_tokens=1000, tools=None):
+        calls.append(messages[-1])
+        if len(calls) == 1:
+            yield ('text', '찾아볼게요.')
+            return {'role': 'assistant', 'content': [{'text': '찾아볼게요.'}, {'toolUse': {'toolUseId': 't1', 'name': 'recommend_jobs', 'input': {}}}]}, 'tool_use'
+        for t in ['경리 사무원 (OC', 'C0123)이 가장 ', '잘 맞아요.']:
+            yield ('text', t)
+        return {'role': 'assistant', 'content': [{'text': '…'}]}, 'end_turn'
+    monkeypatch.setattr(llm, 'converse_stream', stream)
+    card = dict(title='회사 경리', type='job', text='회사에서 5년 동안 경리 업무를 했습니다. 엑셀로 장부를 정리했습니다.')
+    r = client.post('/api/chat/stream', json=dict(messages=[dict(role='user', text='어떤 직무가 맞아요?')], cards=[card]))
+    evs = [json.loads(x) for x in r.text.splitlines()]
+    assert {'tool': 'recommend_jobs'} in evs and evs[-1] == {'done': True}
+    assert ''.join(e.get('t', '') for e in evs) == '찾아볼게요.\n\n경리 사무원이 가장 잘 맞아요.'
+    assert calls[1]['content'][0]['toolResult']['content'][0]['json']['jobs'][0]['name'] == '경리 사무원'
+
+
+def test_chat_stream_bedrock_down(client, monkeypatch):
+    def down(*a, **k):
+        raise RuntimeError('down')
+        yield
+    monkeypatch.setattr(llm, 'converse_stream', down)
+    r = client.post('/api/chat/stream', json=dict(messages=[dict(role='user', text='안녕')]))
+    assert [json.loads(x) for x in r.text.splitlines()] == [{'error': '지금은 답을 드리기 어려워요. 잠시 뒤 다시 시도해 주세요.'}]

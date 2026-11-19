@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -28,7 +28,7 @@ app = FastAPI(title='CareerLens')
 
 # AI(Bedrock)를 부르는 API만 접속 주소별로 횟수를 센다. 한 바퀴 시연이 AI 호출 약 14번.
 # shortcut: 서버 메모리에 세므로 재시작하면 초기화되고 서버가 여러 대면 안 맞는다. 서버를 늘리면 CloudFront WAF로 옮긴다.
-LIMITED = {'/api/files/read', '/api/interview/start', '/api/interview/answer', '/api/explain', '/api/chat'}
+LIMITED = {'/api/files/read', '/api/interview/start', '/api/interview/answer', '/api/interview/merge', '/api/interview/edit', '/api/explain', '/api/chat', '/api/chat/stream'}
 PER_MIN, PER_DAY = 40, 800
 _hits = defaultdict(deque)
 
@@ -101,7 +101,9 @@ def _internal(cards):
     for c in cards:
         b = C.build_card(c.title, c.type, c.text)
         if c.competencies is not None:   # 사용자가 확인·수정한 역량이 우선
-            b['comps'] = {x.kw_idx: dict(level=x.level, match=x.match, quote=x.quote) for x in c.competencies if x.kw_idx in C.D}
+            # AI가 고른 후보(llm_choice)는 점수에 넣지 않는다(P1 8절·P3 4.3. 확인 뒤 반영은 BACKLOG B11과 함께 정함)
+            b['comps'] = {x.kw_idx: dict(level=x.level, match=x.match, quote=x.quote) for x in c.competencies
+                          if x.kw_idx in C.D and x.match != 'llm_choice'}
         if c.paid is not None:
             b['paid'] = c.paid
         b['removed'] = {C.D[k][1] for k in c.removed if k in C.D}
@@ -236,9 +238,22 @@ def _ask_next(card):
     return q
 
 
+def _pick(card):
+    """P3 4.1 ②: 규칙으로 못 잡은 행동 문장 → 사전 후보 5개 중 LLM 닫힌 선택. 카드에 적어 두어 같은 문장은 다시 묻지 않는다.
+    LLM이 실패하면 적지 않는다(다음 요청에서 다시 시도)."""
+    done = card.setdefault('llm_choices', {})
+    todo = {s: C.candidates(s) for s in I.unmatched_actions(card) if s not in done}
+    todo = {s: c for s, c in todo.items() if c}
+    if todo:
+        r = llm.choose_competencies(todo)
+        if r is not None:
+            done.update({s: list(r.get(s, (None, None))) for s in todo})
+
+
 def _interview_out(card, q):
+    _pick(card)
     comps = I.competencies(card)
-    return dict(card=card, question=q, competencies=_comps_out(comps),
+    return dict(card=card, question=q, competencies=_comps_out(comps), merge_keys=I.merge_keys(card),
                 card_in=dict(title=card['activity'], type=card['type'], text=I.card_text(card), paid=card['is_paid_work'],
                              competencies=[dict(kw_idx=k, level=v['level'], match=v['match'], quote=v['quote']) for k, v in comps.items()]))
 
@@ -301,6 +316,21 @@ def interview_answer(req: InterviewAnswer):
     res = _interview_out(card, _ask_next(card))
     res.update(filled=filled, other_experience=interp.get('kind') == 'other')
     return res
+
+
+class InterviewMerge(BaseModel):
+    a: dict
+    b: dict
+
+
+@app.post('/api/interview/merge')
+def interview_merge(req: InterviewMerge):
+    """P3 1절: 사용자가 합치기를 고른 두 카드 → 한 장(a 기준)과 다음 질문."""
+    try:
+        card = I.merge(req.a, req.b)
+        return _interview_out(card, _ask_next(card))
+    except (KeyError, TypeError, AttributeError):
+        raise HTTPException(400, '카드 형식이 올바르지 않아요')
 
 
 class InterviewEdit(BaseModel):
@@ -444,32 +474,101 @@ def _tool(name, args, req):
     return dict(error=f'모르는 도구: {name}')
 
 
-@app.post('/api/chat')
-def chat(req: ChatReq):
+def _agent(req, step):
+    """에이전트 답 한 번. step(system, msgs) = 모델 한 번: ('text', 조각)을 내보내고 (message, stopReason)을 돌려준다.
+    ('text', 조각)과 ('tool', 이름)을 내보내고, 끝나면 오류 문장(정상이면 None)을 돌려준다."""
     ctx = _screen(req)
     msgs = [{'role': m.role, 'content': [{'text': m.text}]} for m in req.messages]
-    used = []
+    for _ in range(5):   # 도구 호출은 최대 4번, 다섯 번째는 답
+        out, stop = yield from step(AGENT_SYSTEM + '\n' + ctx, msgs)
+        calls = [c['toolUse'] for c in out['content'] if 'toolUse' in c]
+        if stop != 'tool_use' or not calls:
+            return None
+        msgs.append(out)
+        results = []
+        for c in calls:
+            yield ('tool', c['name'])
+            try:
+                res = _tool(c['name'], c.get('input') or {}, req)
+            except HTTPException as e:
+                res = dict(error=e.detail)
+            results.append({'toolResult': {'toolUseId': c['toolUseId'], 'content': [{'json': res}]}})
+        msgs.append({'role': 'user', 'content': results})
+    return '질문이 길어져 답을 정리하지 못했어요. 조금 더 짧게 물어봐 주시겠어요?'
+
+
+def _plain_step(system, msgs):
+    resp = llm.converse(system, msgs, 900, TOOLS)
+    out = resp['output']['message']
+    if resp.get('stopReason') != 'tool_use':
+        yield ('text', ''.join(c.get('text', '') for c in out['content']))
+    return out, resp.get('stopReason')
+
+
+def _stream_step(system, msgs):
+    return (yield from llm.converse_stream(system, msgs, 900, TOOLS))
+
+
+def _clean(t):
+    return re.sub(r'\s*\(OCC\d+\)', '', t)   # 프롬프트로 막아도 새는 직무 번호
+
+
+DOWN = '지금은 답을 드리기 어려워요. 잠시 뒤 다시 시도해 주세요.'
+
+
+@app.post('/api/chat')
+def chat(req: ChatReq):
+    parts, used = [], []
+    g = _agent(req, _plain_step)
     try:
-        for _ in range(5):   # 도구 호출은 최대 4번, 다섯 번째는 답
-            resp = llm.converse(AGENT_SYSTEM + '\n' + ctx, msgs, 900, TOOLS)
-            out = resp['output']['message']
-            calls = [c['toolUse'] for c in out['content'] if 'toolUse' in c]
-            if resp.get('stopReason') != 'tool_use' or not calls:
-                reply = ''.join(c.get('text', '') for c in out['content'])
-                return dict(reply=re.sub(r'\s*\(OCC\d+\)', '', reply).strip(), tools=used)   # 프롬프트로 막아도 새는 직무 번호
-            msgs.append(out)
-            results = []
-            for c in calls:
-                used.append(c['name'])
-                try:
-                    res = _tool(c['name'], c.get('input') or {}, req)
-                except HTTPException as e:
-                    res = dict(error=e.detail)
-                results.append({'toolResult': {'toolUseId': c['toolUseId'], 'content': [{'json': res}]}})
-            msgs.append({'role': 'user', 'content': results})
+        while True:
+            k, v = next(g)
+            (parts if k == 'text' else used).append(v)
+    except StopIteration as e:
+        err = e.value
     except Exception:   # Bedrock 오류·시간 초과: 상태 안내(DESIGN 5절)
-        return dict(reply='지금은 답을 드리기 어려워요. 잠시 뒤 다시 시도해 주세요.', tools=used, error=True)
-    return dict(reply='질문이 길어져 답을 정리하지 못했어요. 조금 더 짧게 물어봐 주시겠어요?', tools=used, error=True)
+        return dict(reply=DOWN, tools=used, error=True)
+    if err:
+        return dict(reply=err, tools=used, error=True)
+    return dict(reply=_clean(''.join(parts)).strip(), tools=used)
+
+
+@app.post('/api/chat/stream')
+def chat_stream(req: ChatReq):
+    """/api/chat과 같은 답을 받는 대로 흘려보낸다(B27). 한 줄에 JSON 하나: {"t": 글 조각} / {"tool": 도구 이름} / {"done": true} / {"error": 안내 문장}"""
+    line = lambda o: json.dumps(o, ensure_ascii=False) + '\n'
+
+    def gen():
+        g, buf, sent, gap = _agent(req, _stream_step), '', False, False
+        try:
+            while True:
+                try:
+                    k, v = next(g)
+                except StopIteration as e:
+                    err = e.value
+                    break
+                if k == 'tool':
+                    yield line({'tool': v})
+                    gap = sent   # 도구 앞에 한마디("찾아볼게요")가 있었으면 본 답과 빈 줄로 띄운다
+                    continue
+                if gap:
+                    buf, gap = buf + '\n\n', False
+                buf += v
+                # "(OCC…)"와 그 앞 공백이 조각 사이에 걸칠 수 있어, 닫히지 않은 괄호부터와 끝 공백은 다음 조각까지 잡아 둔다
+                cut = buf.rfind('(')
+                cut = len(buf.rstrip()) if cut < 0 or ')' in buf[cut:] else len(buf[:cut].rstrip())
+                out, buf = _clean(buf[:cut]), buf[cut:]
+                if out.strip():
+                    sent = True
+                    yield line({'t': out})
+                elif out:
+                    buf = out + buf
+            if _clean(buf).strip():
+                yield line({'t': _clean(buf)})
+            yield line({'error': err} if err else {'done': True})
+        except Exception:
+            yield line({'error': DOWN})
+    return StreamingResponse(gen(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 # 화면(frontend/ 빌드 결과)을 같은 주소에서 낸다. API 경로를 모두 등록한 뒤에 붙여야 /api가 가려지지 않는다.

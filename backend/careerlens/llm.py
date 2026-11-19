@@ -31,6 +31,34 @@ def converse(system, messages, max_tokens=1000, tools=None, model=None):
     return client().converse(**kw)
 
 
+def converse_stream(system, messages, max_tokens=1000, tools=None):
+    """Converse를 흘려받는다(B27). ('text', 조각)을 내보내고, 끝나면 (message, stopReason)을 돌려준다(yield from으로 받음)."""
+    kw = dict(modelId=MODEL, system=[{'text': system}], messages=messages, inferenceConfig={'temperature': 0, 'maxTokens': max_tokens})
+    if tools:
+        kw['toolConfig'] = {'tools': tools}
+    blocks, stop = {}, None
+    for ev in client().converse_stream(**kw)['stream']:
+        if 'contentBlockStart' in ev and 'toolUse' in ev['contentBlockStart']['start']:
+            t = ev['contentBlockStart']['start']['toolUse']
+            blocks[ev['contentBlockStart']['contentBlockIndex']] = {'toolUse': dict(toolUseId=t['toolUseId'], name=t['name'], input='')}
+        elif 'contentBlockDelta' in ev:
+            i, d = ev['contentBlockDelta']['contentBlockIndex'], ev['contentBlockDelta']['delta']
+            if 'text' in d:
+                blocks.setdefault(i, {'text': ''})['text'] += d['text']
+                yield ('text', d['text'])
+            elif 'toolUse' in d:
+                blocks[i]['toolUse']['input'] += d['toolUse']['input']
+        elif 'messageStop' in ev:
+            stop = ev['messageStop']['stopReason']
+    content = []
+    for i in sorted(blocks):
+        b = blocks[i]
+        if 'toolUse' in b:
+            b = {'toolUse': dict(b['toolUse'], input=json.loads(b['toolUse']['input'] or '{}'))}
+        content.append(b)
+    return {'role': 'assistant', 'content': content}, stop
+
+
 def _text(resp):
     return ''.join(c.get('text', '') for c in resp['output']['message']['content'])
 
@@ -81,6 +109,26 @@ def transcribe_image(data, fmt):
         return _text(converse(system, msgs, 1500)).strip()
     except Exception:
         return None
+
+
+def choose_competencies(items):
+    """P3 4.1 ② 닫힌 선택: items {문장: [kw_idx 후보]} → {문장: (kw_idx 또는 None, 이유)}. 후보 밖·이유 없음은 코드가 버린다. 실패하면 None."""
+    from careerlens.cards import D, DEF
+    sents = list(items)
+    system = ('너는 경험 문장이 보여 주는 역량을 후보 목록에서 고른다. 문장마다 후보 중 가장 맞는 것 하나를 고르거나, 맞는 것이 없으면 null을 고른다. '
+              '후보에 없는 역량은 고르지 않는다. 문장에 없는 일을 추측해 고르지 않는다. 고른 이유를 문장 속 표현을 들어 한 문장으로 쓴다.')
+    user = json.dumps([dict(id=i, sentence=s, candidates=[dict(kw=k, name=D[k][1], definition=DEF[k]) for k in items[s]])
+                       for i, s in enumerate(sents)], ensure_ascii=False)
+    r = ask_json(system, f'{user}\n출력 형식: {{"choices":[{{"id":0,"kw":12,"reason":"..."}}]}} (맞는 후보가 없으면 "kw":null)', 200 + 120 * len(sents))
+    if not isinstance(r, dict) or not isinstance(r.get('choices'), list):
+        return None
+    out = {}
+    for c in r['choices']:
+        if not isinstance(c, dict) or not isinstance(c.get('id'), int) or not 0 <= c['id'] < len(sents):
+            continue
+        s, kw, why = sents[c['id']], c.get('kw'), c.get('reason')
+        out[s] = (kw, why.strip()) if kw in items[s] and isinstance(why, str) and why.strip() else (None, None)
+    return out
 
 
 def phrase_question(q, card):

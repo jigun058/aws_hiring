@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import {
-  PERSONAS, STEPS, STEP_LABEL, TYPE_LABEL, cardsIn, courses, deleteCard, deletePoint, focusChat, get, goStep, loadPersona, loadPoint, points,
+  PERSONAS, STEPS, STEP_LABEL, TYPE_LABEL, cardsIn, courses, deleteCard, deletePoint, focusChat, get, goStep, loadPersona, loadPoint, mergeCards, points,
   postings, recommend, reset, savePoint, selectedPost, send, set, start, toCards, useApp,
 } from './store'
 import { AiDot, Btn, EmptyArt, Logo, Spinner } from './ui'
@@ -173,7 +173,7 @@ function Chat({ s }) {
   const [drag, setDrag] = useState(null)   // 끄는 중의 비율(끝나면 저장)
   const listRef = useRef(null), boxRef = useRef(null)
   const [input, setInput] = useState('')
-  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, [s.msgs.length, s.typing, s.chatOpen])
+  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, [s.msgs.length, s.msgs.at(-1)?.t, s.typing, s.chatOpen])
   useEffect(() => {
     if (drag === null) return
     const move = e => {
@@ -225,6 +225,12 @@ function Chat({ s }) {
               {m.step > 1 && <span className="text-[14px] text-sub">· {STEP_LABEL[m.step]}</span>}
             </div>
             <div className={`text-[18px] leading-[1.7] whitespace-pre-line text-pretty ${m.error ? 'text-err' : 'text-ink'}`}>{m.t}</div>
+            {m.merge && (m.done
+              ? <span className="text-[15px] text-sub">✓ {m.done}를 골랐어요</span>
+              : <div className="flex flex-wrap gap-2">
+                  <Btn size="sm" onClick={() => mergeCards(m.id, true)} disabled={!!s.typing}>한 장으로 합치기</Btn>
+                  <Btn kind="plain" size="sm" onClick={() => mergeCards(m.id, false)} disabled={!!s.typing}>따로 두기</Btn>
+                </div>)}
             {m === last && m.chips && !s.typing && (
               <div className="flex flex-wrap gap-2">
                 {m.chips.map(c => (

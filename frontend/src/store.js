@@ -76,7 +76,7 @@ const card = id => state.cards.find(c => c.id === id)
 const pending = c => !!c?.question && !c.question.end
 const fromApi = (r, old = {}) => ({
   id: old.id || uid(), removed: old.removed || [], saved: old.saved || false,
-  card: r.card, competencies: r.competencies, card_in: r.card_in, question: r.question,
+  card: r.card, competencies: r.competencies, card_in: r.card_in, question: r.question, mk: r.merge_keys || [],
 })
 function patchCard(id, x) {
   set(p => ({ cards: p.cards.map(c => c.id === id ? { ...c, ...(typeof x === 'function' ? x(c) : x) } : c) }))
@@ -140,12 +140,41 @@ export function send(text) {
 }
 
 function announce(news, intro = '') {
+  suggestMerges(news)
   const t = intro + (news.length > 1
     ? `경험 ${news.length}개로 나눠 카드 초안을 만들었어요: ${news.map(x => `‘${x.card.activity}’`).join(', ')}.`
     : news[0].card.activity === '내 경험' ? `${intro ? '파일 내용' : '말씀하신 경험'}으로 카드 초안을 만들었어요.` : `‘${news[0].card.activity}’ 경험으로 카드 초안을 만들었어요.`)
   const first = news.find(pending)
   if (first) ask(first, t + (news.length > 1 ? `\n먼저 ‘${first.card.activity}’부터 여쭤볼게요.` : ''))
   else { say(t); askNextOrFinish() }
+}
+
+// P3 1절: 같은 경험으로 보이는 카드(같은 유형 + 같은 자격 이름·조직 이름 키)가 생기면 합치기를 제안만 한다
+const similar = (x, y) => x.id !== y.id && x.card.type === y.card.type && x.mk?.some(k => y.mk?.includes(k))
+function suggestMerges(news) {
+  const ids = state.cards.map(c => c.id)
+  for (const n of news) {
+    const o = state.cards.find(c => similar(c, n) && ids.indexOf(c.id) < ids.indexOf(n.id))
+    if (o) say(`‘${n.card.activity}’ 카드는 ‘${o.card.activity}’ 카드와 같은 경험 같아요. 한 장으로 합칠까요?`, { merge: [o.id, n.id] })
+  }
+}
+
+export function mergeCards(msgId, yes) {
+  if (state.typing) return
+  const [aId, bId] = state.msgs.find(m => m.id === msgId)?.merge || []
+  set(p => ({ msgs: p.msgs.map(m => m.id === msgId ? { ...m, done: yes ? '합치기' : '따로 두기' } : m) }))
+  const a = card(aId), b = card(bId)
+  if (!yes || !a || !b) return
+  return typing(async () => {
+    const r = await api('interview/merge', { a: a.card, b: b.card })
+    const was = state.activeCard
+    set(p => ({ cards: p.cards.filter(c => c.id !== bId) }))
+    patchCard(aId, old => fromApi(r, { ...old, removed: [...old.removed, ...b.removed], saved: old.saved || b.saved }))
+    stale()
+    say(`‘${b.card.activity}’ 카드를 ‘${a.card.activity}’ 카드에 합쳤어요.`)
+    const now = card(was === bId ? aId : was)   // 묻던 질문을 다시 보여 준다(예시 답 버튼은 맨 아래 메시지에만 나옴)
+    if (now) { if (pending(now)) ask(now); else askNextOrFinish(now.card.activity) }
+  }, '카드를 합치는 중이에요…')
 }
 
 // ① 파일 올리기: 파일마다 서버가 글을 꺼내고(개인정보 가림), 그 글로 대화와 같은 카드 만들기를 탄다. 하나가 실패해도 나머지는 계속.
@@ -331,11 +360,46 @@ async function agent() {
   }
   while (hist.length && hist[0].role !== 'user') hist.shift()
   const job = s.jobs?.[s.jobSel]
-  const r = await api('chat', {
+  const body = {
     messages: hist, step: STEP_LABEL[s.step], cards: cardsIn(),
     occupation_id: job?.occupation_id, posting_id: s.step >= 4 ? s.postSel || undefined : undefined,
-  })
-  say(r.reply || '답을 만들지 못했어요. 다시 물어봐 주세요.', r.error ? { error: true } : { kind: 'agent' })
+  }
+  // B27: 답을 받는 대로 흘려 보여 준다. 한 줄에 JSON 하나({t} 글 조각 / {tool} 도구 이름 / {done} / {error})
+  let r
+  try {
+    r = await fetch('/api/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  } catch {
+    throw new Error('인터넷 연결이 잠시 끊긴 것 같아요. 연결을 확인하고 다시 시도해 주세요.')
+  }
+  if (!r.ok || !r.body) {
+    let d = null
+    try { d = (await r.json()).detail } catch { /* 본문 없음 */ }
+    throw new Error(typeof d === 'string' ? d : '서버가 잠시 답하지 않아요. 1~2분 뒤에 다시 시도해 주세요.')
+  }
+  const id = uid(), reader = r.body.pipeThrough(new TextDecoderStream()).getReader()
+  let text = '', buf = '', failed = false
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += value
+    for (let i; (i = buf.indexOf('\n')) >= 0; buf = buf.slice(i + 1)) {
+      const ev = JSON.parse(buf.slice(0, i))
+      if (ev.tool) set({ typing: TOOL_LABEL[ev.tool] || '자료를 찾는 중이에요…' })
+      else if (ev.error) { failed = true; say(ev.error, { error: true }) }
+      else if (ev.t) {
+        const first = !text
+        text += ev.t
+        set(p => first
+          ? { typing: '답을 쓰는 중이에요…', msgs: [...p.msgs, { id, r: 'a', t: text.trimStart(), step: p.step, kind: 'agent' }] }
+          : { msgs: p.msgs.map(m => m.id === id ? { ...m, t: text.trim() } : m) })
+      }
+    }
+  }
+  if (!text && !failed) say('답을 만들지 못했어요. 다시 물어봐 주세요.', { error: true })
+}
+const TOOL_LABEL = {
+  recommend_jobs: '직무 추천을 계산하는 중이에요…', search_postings: '채용공고를 찾는 중이에요…',
+  search_courses: '교육과정을 찾는 중이에요…', map_competencies: '역량 사전에서 찾는 중이에요…',
 }
 
 // ---------------- 시연 도구 ----------------

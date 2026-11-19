@@ -202,6 +202,55 @@ def edit(card, field, value):
         card['locked'].remove(field)
 
 
+# P3 1절: 비슷한 카드 2장(조직명 같고 기간이 겹침)은 합치기를 제안만 한다. 화면이 키가 겹치는 같은 유형 카드를 찾아 묻는다.
+# [기본값] 카드에 조직·기간 칸이 따로 없어, 자격증은 같은 자격 이름, 그 밖은 활동명의 첫 낱말(보통 조직 이름)로 본다.
+_GENERIC = {'근무', '업무', '관리', '경험', '활동', '직장', '회사', '아르바이트', '알바', '취득', '자격증', '자격', '보유', '담당',
+            '운영', '기타', '경력', '내', '일', '단기', '정규직', '계약직'}
+
+
+def merge_keys(card):
+    if card['type'] == 'certificate':
+        from careerlens import paths  # noqa: F401  vendor 경로
+        import p1_engine as E
+        text = card['activity'] + ' ' + card_text(card)
+        return sorted({'lic:' + re.sub(r'\s|\d급$', '', m.group(0)) for m in E.LIC_NAMES.finditer(text)})
+    first = next((w for w in re.findall(r'[가-힣A-Za-z0-9]{2,}', card['activity']) if w not in _GENERIC), None)
+    return ['w:' + first] if first else []
+
+
+def merge(a, b):
+    """사용자가 '합치기'를 고른 두 카드 → 한 장. a(먼저 있던 카드)의 활동명·유형을 쓰고, b의 원문과 채운 값을 더한다."""
+    import copy
+    m = copy.deepcopy(a)
+    ren = {}
+    for sid, text in b['sources'].items():
+        new = sid
+        while new in m['sources']:
+            new += '_m'   # 'edit_' 앞머리는 그대로 둔다(card_text가 본다)
+        m['sources'][new] = text
+        ren[sid] = new
+    for slot, v in b['slots'].items():
+        if slot not in m['slots']:
+            continue
+        for x in (v if isinstance(v, list) else [v] if v else []):
+            if not isinstance(x, dict) or x.get('by') == 'system':
+                continue
+            x = dict(x, source=ren.get(x.get('source'), x.get('source')))
+            cur = m['slots'][slot]
+            if isinstance(cur, list):
+                if not any(_norm(y['quote']) == _norm(x['quote']) for y in cur):
+                    cur.append(x)
+            elif not cur or cur.get('by') == 'system':
+                m['slots'][slot] = x
+    for slot, st in b['slot_status'].items():
+        if st == 'filled' and m['slot_status'].get(slot) not in ('filled', 'not_asked'):
+            m['slot_status'][slot] = 'filled'
+    m['locked'] = list(dict.fromkeys(m['locked'] + b['locked']))
+    m['asked'] = m['asked'] + [q for q in b['asked'] if q not in m['asked']]
+    m['is_paid_work'] = bool(a['is_paid_work'] or b['is_paid_work'])
+    return m
+
+
 def safe_question(phrased, base):
     """LLM이 다듬은 질문이 금지 주제를 건드리거나 길면 기본 문장(P3 F3-3 예외 처리)."""
     if not phrased or FORBIDDEN.search(phrased) or len(re.findall(r'[.?!]', phrased)) > 2:
@@ -245,9 +294,26 @@ def competencies(card):
                 lv = 'L3' if has_result else 'L2'
             if k not in comps or RANK[lv] > RANK[comps[k]['level']]:
                 comps[k] = dict(level=lv, match=mt, quote=s)
+    for s, kind in sents:   # P3 4.1 ②: 규칙이 못 잡은 행동 문장에 AI가 후보 중에서 고른 역량(llm_candidate)
+        kw, why = (card.get('llm_choices') or {}).get(s) or (None, None)
+        if kind == 'action' and kw in D and kw not in comps:
+            lv = 'L1' if LEARN.search(s) else 'L3' if has_result else 'L2'
+            comps[kw] = dict(level=lv, match='llm_choice', quote=s, reason=why)
     comps = {k: v for k, v in comps.items() if v['level'] != 'L0'}
     keep = sorted(comps, key=lambda k: (_CAT_ORDER.get(D[k][0], 3), -RANK[comps[k]['level']], k))[:MAX_COMPETENCIES]
     return {k: comps[k] for k in keep}
+
+
+def unmatched_actions(card, n=5):
+    """규칙으로 역량이 하나도 안 잡힌 행동 문장(P3 4.1 ②의 LLM 대상)."""
+    if card['type'] == 'certificate':
+        return []
+    out = []
+    for x in card['slots']['actions']:
+        s = _sentence(card, x)
+        if s and s not in out and not tag_sentence(s)[0]:
+            out.append(s)
+    return out[:n]
 
 
 def card_text(card):
