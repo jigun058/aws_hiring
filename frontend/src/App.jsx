@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, setTape, tapeInfo, tapeJson } from './api'
+import { api } from './api'
 import {
   PERSONAS, STEPS, STEP_LABEL, TYPE_LABEL, cardsIn, courses, focusChat, get, goStep, loadPersona, postings, recommend, reset,
   selectedPost, send, set, start, toCards, useApp,
@@ -297,28 +297,9 @@ function MyDrawer({ s }) {
 // ---------------- 시연 도구(왼쪽 아래, DESIGN 6절) ----------------
 function Demo({ s }) {
   const b = 'h-8 rounded-md border bg-[#1F232B] text-[#E6E8EE] font-[inherit] text-[12px] disabled:opacity-40'
-  const t = tapeInfo()
-  const tape = (mode, calls) => { setTape(mode, calls); set({}) }   // set({}): 서랍을 다시 그림
-  const download = () => {
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([tapeJson()], { type: 'application/json' }))
-    a.download = 'careerlens-녹화본.json'
-    a.click()
-  }
-  const upload = async e => {
-    try {
-      const calls = JSON.parse(await e.target.files[0].text())
-      if (!Array.isArray(calls) || !calls.every(c => c.path && 'res' in c)) throw 0
-      tape('off', calls)
-    } catch { alert('녹화본 파일이 아니에요.') }
-    e.target.value = ''
-  }
   return <>
     <button onClick={() => set({ demo: !s.demo })} title="시연 도구"
-      className={`absolute left-2.5 bottom-2.5 z-[60] h-7 px-2.5 rounded-md border text-[11px] font-mono tracking-[.04em] ${t.mode === 'off'
-        ? 'border-line bg-white/85 text-faint opacity-50 hover:opacity-100'
-        : t.mode === 'play' ? 'border-[#C99A1E] bg-[#FFF4D1] text-[#6B4E00] font-bold' : 'border-[#D9534F] bg-[#FDECEA] text-[#9B2C2C] font-bold'}`}>
-      {t.mode === 'play' ? 'DEMO · 재생 중(저장한 응답)' : t.mode === 'rec' ? 'DEMO · ● 녹화 중' : 'DEMO'}</button>
+      className="absolute left-2.5 bottom-2.5 z-[60] h-7 px-2.5 rounded-md border border-line bg-white/85 text-[11px] text-faint opacity-50 hover:opacity-100 font-mono tracking-[.04em]">DEMO</button>
     {s.demo && (
       <div className="msg-in absolute left-2.5 bottom-[46px] z-[61] w-[340px] bg-[#16181D] text-[#E6E8EE] rounded-xl overflow-hidden shadow-[0_20px_48px_rgba(0,0,0,.4)] font-mono text-[13px] leading-[1.4]">
         <div className="h-2 bg-[repeating-linear-gradient(135deg,#F5C84C_0_10px,#16181D_10px_20px)]" />
@@ -348,19 +329,6 @@ function Demo({ s }) {
             <button onClick={() => set({ screen: 'analyze' })} className={`${b} border-[#3A3F4B]`}>공고 분석</button>
             <button onClick={() => set({ chatRatio: 1 / 3, chatOpen: true })} className={`${b} border-[#3A3F4B]`}>대화창 너비 처음대로</button>
             <button onClick={() => set({ chatOpen: !get().chatOpen })} className={`${b} border-[#3A3F4B]`}>대화창 접기/펴기</button>
-          </div>
-          <div className="flex flex-col gap-1.5"><span className="text-[#8B93A5]">녹화·재생 (서버·Bedrock 장애 대비) · 녹화본 응답 {t.n}개</span>
-            <div className="grid grid-cols-3 gap-1">
-              <button onClick={() => tape(t.mode === 'rec' ? 'off' : 'rec')} disabled={t.mode === 'play'}
-                className={`${b} ${t.mode === 'rec' ? 'border-[#F07A6E]' : 'border-[#3A3F4B]'}`}>{t.mode === 'rec' ? '■ 녹화 끝' : '● 새로 녹화'}</button>
-              <button onClick={() => tape(t.mode === 'play' ? 'off' : 'play')} disabled={!t.n || t.mode === 'rec'}
-                className={`${b} ${t.mode === 'play' ? 'border-[#F5C84C]' : 'border-[#3A3F4B]'}`}>{t.mode === 'play' ? '■ 재생 끝' : '▶ 재생'}</button>
-              <button onClick={download} disabled={!t.n} className={`${b} border-[#3A3F4B]`}>내려받기</button>
-            </div>
-            <label className={`${b} border-[#3A3F4B] flex items-center justify-center cursor-pointer`}>
-              녹화본 파일 불러오기<input type="file" accept=".json,application/json" onChange={upload} className="hidden" />
-            </label>
-            <span className="text-[#8B93A5] text-[12px]">새로 녹화하면 이전 녹화본은 지워져요. 재생 중에 녹화본에 없는 요청은 실제 서버로 가요.</span>
           </div>
           <div className="text-[#8B93A5] text-[12px]">카드 {s.cards.length}장 · 추천에 쓰는 카드 {s.cards.length ? cardsIn().length : 0}장</div>
         </div>

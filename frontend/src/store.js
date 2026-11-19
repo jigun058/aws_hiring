@@ -260,7 +260,7 @@ export function courses() {
     set({ gaps: r.gaps, maxStep: 5 })
     const withC = r.gaps.filter(g => g.courses.length)
     say(r.gaps.length
-      ? `채우면 좋은 역량 ${r.gaps.length}가지를 찾았어요. 그중 ${withC.length}가지는 지금 신청할 수 있는 국비 과정이 있어요.`
+      ? `채우면 좋은 역량 ${r.gaps.length}가지를 찾았어요. 그중 ${withC.length}가지는 11월 12일 기준으로 개강을 앞둔 국비 과정이 있어요.`
       : '교육으로 채울 핵심 역량이 없어요. 고른 공고의 역량을 이미 갖고 계세요.')
   })
 }

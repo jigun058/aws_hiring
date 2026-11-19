@@ -443,7 +443,7 @@ export function Step5({ s }) {
             </div>
           )) : (
             <div className="px-6 py-5 rounded-2xl border border-line text-[17px] text-sub leading-[1.65]">
-              지금 신청할 수 있는 국비 과정 가운데 이 역량에 맞는 과정을 찾지 못했어요.
+              11월 12일 기준으로 개강을 앞둔 국비 과정 가운데 이 역량에 맞는 과정을 찾지 못했어요.
             </div>
           )}
         </section>
