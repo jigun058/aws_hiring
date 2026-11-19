@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import {
-  NO_FILTERS, TYPE_LABEL, askSlot, deleteCard, editField, fmt, focusChat, pickJob, pickPost, removeComp, saveCard, selectedPost, set, setFilters, undoRemove,
+  NO_FILTERS, TYPE_LABEL, askSlot, deleteCard, editField, fmt, focusChat, pickJob, pickPost, removeComp, saveCard, selectedPost, set, setFilters, undoRemove, upload,
 } from './store'
 import { AiDot, Btn, GRADE, Grade, H1, Pill, Spinner, won } from './ui'
 
 // ---------------- ① 경험 수집 ----------------
 const START_TYPES = [['job', '직장 경력'], ['part_time', '아르바이트·단기 일'], ['certificate', '자격증·교육']]
 const CARE_TYPES = [['family_care', '가족 돌봄'], ['community', '지역 활동']]
+const FILE_TYPES = '.pdf,.docx,.txt,.md,.jpg,.jpeg,.png,.webp,.hwp,.hwpx,.doc,.pptx'   // 한글·옛 워드·PPT는 받아서 'PDF로 저장' 안내
 
 export function Step1({ s }) {
   const toggle = t => set(p => ({ types: p.types.includes(t) ? p.types.filter(x => x !== t) : [...p.types, t] }))
@@ -27,11 +28,14 @@ export function Step1({ s }) {
           <p className="m-0 text-[17px] text-sub leading-[1.65]">“마트에서 8년 동안 재고 관리를 했어요”처럼 한두 문장이면 돼요. 대답이 어려우면 예시 답을 누르기만 하세요.</p>
           <Btn size="lg" className="mt-auto self-start" onClick={startChat}>대화창에서 시작하기 →</Btn>
         </div>
-        <div className="border-[1.5px] border-dashed border-field rounded-[20px] px-7 py-8 flex flex-col items-center justify-center text-center gap-2.5">
-          <div className="size-14 rounded-full border-[1.5px] border-field flex items-center justify-center text-[26px] font-extrabold text-muted">↑</div>
-          <div className="text-[20px] font-extrabold text-muted">이력서 파일 올리기</div>
-          <div className="text-[16px] text-muted leading-[1.6]">준비 중이에요. 지금은 대화로 시작해 주세요.</div>
-        </div>
+        <label onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); upload(e.dataTransfer.files) }}
+          className={`break-keep border-[1.5px] border-dashed border-field rounded-[20px] px-7 py-8 flex flex-col items-center justify-center text-center gap-2.5 ${s.typing ? 'opacity-60' : 'cursor-pointer hover:border-brand hover:bg-brand/5'}`}>
+          <input type="file" multiple accept={FILE_TYPES} disabled={!!s.typing} className="sr-only"
+            onChange={e => { upload(e.target.files); e.target.value = '' }} />
+          <div className="size-14 rounded-full border-[1.5px] border-brand flex items-center justify-center text-[26px] font-extrabold text-brand">↑</div>
+          <div className="text-[20px] font-extrabold text-ink">이력서·자격증 파일 올리기</div>
+          <div className="text-[16px] text-sub leading-[1.6]">PDF, 워드, 텍스트, 자격증 사진을 올리거나 여기로 끌어 놓으세요. 전화번호·이메일·주소는 가려서 읽어요.</div>
+        </label>
       </div>
 
       <div className="flex flex-col gap-3.5">

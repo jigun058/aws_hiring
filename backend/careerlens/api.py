@@ -3,6 +3,8 @@
 로그인이 없어 서버는 사용자 상태를 들고 있지 않는다. 화면이 경험 카드를 들고 있다가 매 요청에 함께 보낸다.
 (경험 카드 저장(DynamoDB)과 에이전트 대화는 다음 작업)
 """
+import base64
+import binascii
 import json
 import re
 import time
@@ -15,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from careerlens import cards as C
-from careerlens import courses, interview as I, llm, postings
+from careerlens import courses, files, interview as I, llm, postings
 from careerlens.paths import BACKEND
 from careerlens.posting_analysis import analyze
 from careerlens.recommend import Recommender, is_paid
@@ -26,7 +28,7 @@ app = FastAPI(title='CareerLens')
 
 # AI(Bedrock)를 부르는 API만 접속 주소별로 횟수를 센다. 한 바퀴 시연이 AI 호출 약 14번.
 # shortcut: 서버 메모리에 세므로 재시작하면 초기화되고 서버가 여러 대면 안 맞는다. 서버를 늘리면 CloudFront WAF로 옮긴다.
-LIMITED = {'/api/interview/start', '/api/interview/answer', '/api/explain', '/api/chat'}
+LIMITED = {'/api/files/read', '/api/interview/start', '/api/interview/answer', '/api/explain', '/api/chat'}
 PER_MIN, PER_DAY = 40, 800
 _hits = defaultdict(deque)
 
@@ -241,6 +243,24 @@ def _interview_out(card, q):
                              competencies=[dict(kw_idx=k, level=v['level'], match=v['match'], quote=v['quote']) for k, v in comps.items()]))
 
 
+class FileIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    data: str = Field(max_length=7_000_000)   # base64(5MB → 약 6.7MB)
+
+
+@app.post('/api/files/read')
+def files_read(req: FileIn):
+    """P3 F3-1 ①: 파일 하나 → 개인정보를 가린 글. 화면이 이 글로 /api/interview/start를 부른다."""
+    try:
+        text = files.read(req.name, base64.b64decode(req.data, validate=True))
+    except binascii.Error:
+        raise HTTPException(400, f'{req.name}: 파일을 받지 못했어요. 다시 올려 주세요')
+    except ValueError as e:
+        raise HTTPException(422, f'{req.name}: {e}')
+    text = I.mask_pii(text)
+    return dict(text=text[:5000], truncated=len(text) > 5000)
+
+
 @app.post('/api/interview/start')
 def interview_start(req: InterviewStart):
     """경험 글 → 경험 카드 초안(여러 장일 수 있음)과 카드마다 첫 질문."""
@@ -257,8 +277,10 @@ def interview_start(req: InterviewStart):
         for x in e.get('slots') or []:
             if isinstance(x, dict):
                 I.fill(card, x.get('slot'), x.get('value'), x.get('quote'), 'chat_0', is_estimate=bool(x.get('is_estimate')))
-        if typ == 'certificate' and not card['slots']['actions']:   # 자격증 글을 화면에서 고칠 수 있게 '행동' 칸에 문장마다 넣는다
-            for s in I.sentences(text):
+        if typ == 'certificate' and not card['slots']['actions']:   # 자격증 글을 화면에서 고칠 수 있게 '행동' 칸에 넣는다
+            # 경험이 여럿인 글(이력서)이면 이 카드의 인용만. 글 전체를 넣으면 다른 경험의 역량이 자격증 카드에 붙는다
+            quotes = [x.get('quote') for x in e.get('slots') or [] if isinstance(x, dict) and I.quote_ok(x.get('quote'), text)]
+            for s in dict.fromkeys(quotes) if len(exps) > 1 else I.sentences(text):
                 I.fill(card, 'actions', s, s, 'chat_0')
         out.append(_interview_out(card, _ask_next(card)))
     return dict(cards=out)

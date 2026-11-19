@@ -237,7 +237,7 @@ function Chat({ s }) {
         {(s.typing || s.busy) && (
           <div role="status" className="flex items-center gap-3">
             <span className="ai-dot pulse" style={{ width: 14, height: 14 }} />
-            <span className="text-[17px] text-ink font-bold">{s.typing ? (agentMode ? '자료를 찾아 답을 정리하는 중이에요… 보통 5~10초 걸려요' : '답을 정리하는 중이에요…') : s.busy.title}</span>
+            <span className="text-[17px] text-ink font-bold">{typeof s.typing === 'string' ? s.typing : s.typing ? (agentMode ? '자료를 찾아 답을 정리하는 중이에요… 보통 5~10초 걸려요' : '답을 정리하는 중이에요…') : s.busy.title}</span>
           </div>
         )}
       </div>

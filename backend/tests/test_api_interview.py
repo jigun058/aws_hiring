@@ -60,6 +60,19 @@ def test_llm_split_and_fabricated_quote_dropped(client, monkeypatch):
     assert '아이' not in cards[1]['question']['question']
 
 
+def test_certificate_card_from_resume_keeps_only_its_quotes(client, monkeypatch):
+    """이력서처럼 경험이 여럿인 글: 자격증 카드에 글 전체가 아니라 그 카드의 인용만 들어간다(11/19 실제 PDF에서 찾음)."""
+    text = '물류센터 8년. 엑셀로 재고 현황표 작성. 고객 전화 응대.\n자격\n지게차운전기능사 (2014)'
+    monkeypatch.setattr(llm, 'converse', fake([
+        {'experiences': [
+            {'activity': '물류센터 근무', 'type': 'job', 'slots': [{'slot': 'actions', 'value': '재고표', 'quote': '엑셀로 재고 현황표 작성'}]},
+            {'activity': '지게차운전기능사 취득', 'type': 'certificate', 'slots': [{'slot': 'role', 'value': '취득', 'quote': '지게차운전기능사 (2014)'}]}]},
+    ] + [RuntimeError('down')] * 5))
+    cert = client.post('/api/interview/start', json=dict(text=text)).json()['cards'][1]
+    assert [a['value'] for a in cert['card']['slots']['actions']] == ['지게차운전기능사 (2014)']
+    assert '스프레드시트(엑셀)' not in {k['keyword'] for k in cert['competencies']}
+
+
 def test_explain_drops_invented_numbers(client, monkeypatch):
     job = dict(name='경리 사무원', score=59.56, gaps=['회계 프로그램'], cautions=[],
                evidence=[dict(keyword='회계·경리 처리', level='L2', card='회사 경리', quote='회사에서 5년 동안 경리 업무를 했습니다.')])

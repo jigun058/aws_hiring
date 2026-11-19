@@ -6,3 +6,4 @@ uvicorn==0.54.0
 boto3==1.44.5
 pytest==9.2.0
 httpx==0.28.1
+pypdf==7.1.1

@@ -71,6 +71,18 @@ def extract_experiences(text):
     return r.get('experiences') if isinstance(r, dict) and isinstance(r.get('experiences'), list) else None
 
 
+def transcribe_image(data, fmt):
+    """자격증·수료증 사진 → 사진 속 글자 그대로(P3 F3-1 ①의 '텍스트 추출'을 사진에서 대신). 실패하면 None.
+    옮겨 적은 글이 이후 인용 검사의 원문이 된다."""
+    system = ('너는 사진 속 글자를 옮겨 적는다. 보이는 글자만 줄 단위로 그대로 적는다. 요약·설명·추측을 붙이지 않는다. '
+              '읽을 수 없는 글자는 건너뛴다. 글자가 없으면 아무것도 출력하지 않는다.')
+    msgs = [{'role': 'user', 'content': [{'image': {'format': fmt, 'source': {'bytes': data}}}, {'text': '사진 속 글자를 옮겨 적어 주세요.'}]}]
+    try:
+        return _text(converse(system, msgs, 1500)).strip()
+    except Exception:
+        return None
+
+
 def phrase_question(q, card):
     """P3 F3-3: 기본 질문을 카드에 맞게 바꿔 말하기만. 금지 주제 검사는 interview.safe_question."""
     filled = {s: v['value'] for s, v in card['slots'].items() if isinstance(v, dict) and v.get('value')}

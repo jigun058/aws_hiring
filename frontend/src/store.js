@@ -59,8 +59,8 @@ export const fmt = x => (x ?? 0).toLocaleString('ko-KR')
 function say(t, x = {}) { set(p => ({ msgs: [...p.msgs, { id: uid(), r: 'a', t, step: p.step, ...x }] })) }
 function you(t, kind) { set(p => ({ msgs: [...p.msgs, { id: uid(), r: 'u', t, step: p.step, kind }] })) }
 
-async function typing(fn) {
-  set({ typing: true })
+async function typing(fn, label = true) {   // label: 기다리는 동안 대화창에 보일 문장
+  set({ typing: label })
   try { await fn() } catch (e) { say(e.message, { error: true }) } finally { set({ typing: false }) }
 }
 
@@ -136,15 +136,55 @@ export function send(text) {
   you(text, 'interview')
   const c = card(state.activeCard)
   if (pending(c)) return typing(() => answer(c, text))
+  return typing(async () => announce(await startCards(text)))
+}
+
+function announce(news, intro = '') {
+  const t = intro + (news.length > 1
+    ? `경험 ${news.length}개로 나눠 카드 초안을 만들었어요: ${news.map(x => `‘${x.card.activity}’`).join(', ')}.`
+    : news[0].card.activity === '내 경험' ? `${intro ? '파일 내용' : '말씀하신 경험'}으로 카드 초안을 만들었어요.` : `‘${news[0].card.activity}’ 경험으로 카드 초안을 만들었어요.`)
+  const first = news.find(pending)
+  if (first) ask(first, t + (news.length > 1 ? `\n먼저 ‘${first.card.activity}’부터 여쭤볼게요.` : ''))
+  else { say(t); askNextOrFinish() }
+}
+
+// ① 파일 올리기: 파일마다 서버가 글을 꺼내고(개인정보 가림), 그 글로 대화와 같은 카드 만들기를 탄다. 하나가 실패해도 나머지는 계속.
+const PHOTO = /\.(jpe?g|png|webp)$/i
+async function shrink(file) {   // 휴대폰 사진(수 MB)을 긴 변 1600px JPEG로 줄여 보낸다
+  const img = await createImageBitmap(file)
+  const k = Math.min(1, 1600 / Math.max(img.width, img.height))
+  const cv = Object.assign(document.createElement('canvas'), { width: Math.round(img.width * k), height: Math.round(img.height * k) })
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height)
+  return new Promise(ok => cv.toBlob(ok, 'image/jpeg', 0.85))
+}
+const b64 = blob => new Promise((ok, no) => {
+  const r = new FileReader()
+  r.onload = () => ok(String(r.result).split(',')[1])
+  r.onerror = () => no(new Error('파일을 열지 못했어요'))
+  r.readAsDataURL(blob)
+})
+
+export function upload(fileList) {
+  const list = [...fileList]
+  if (!list.length || state.typing) return
+  set({ chatOpen: true })
+  you(list.map(f => `📎 ${f.name}`).join('\n'), 'interview')
   return typing(async () => {
-    const news = await startCards(text)
-    const t = news.length > 1
-      ? `경험 ${news.length}개로 나눠 카드 초안을 만들었어요: ${news.map(x => `‘${x.card.activity}’`).join(', ')}.`
-      : news[0].card.activity === '내 경험' ? '말씀하신 경험으로 카드 초안을 만들었어요.' : `‘${news[0].card.activity}’ 경험으로 카드 초안을 만들었어요.`
-    const first = news.find(pending)
-    if (first) ask(first, t + (news.length > 1 ? `\n먼저 ‘${first.card.activity}’부터 여쭤볼게요.` : ''))
-    else { say(t); askNextOrFinish() }
-  })
+    const news = [], read = []
+    for (const f of list) {
+      set({ typing: `‘${f.name}’ 파일을 읽는 중이에요…${PHOTO.test(f.name) ? ' 사진은 10초쯤 걸려요' : ''}` })
+      try {
+        const small = PHOTO.test(f.name) ? await shrink(f).catch(() => null) : null   // 줄이기 실패 → 원본 그대로(형식은 서버가 내용으로 판단)
+        const r = await api('files/read', { name: f.name, data: await b64(small || f) })
+        set({ typing: `‘${f.name}’ 파일에서 경험을 찾는 중이에요…` })
+        news.push(...await startCards(r.text))
+        read.push(`‘${f.name}’${r.truncated ? '(글이 길어 앞부분 5,000자만)' : ''}`)
+      } catch (e) {
+        say(e.message.startsWith(f.name) ? e.message : `${f.name}: ${e.message}`, { error: true })
+      }
+    }
+    if (news.length) announce(news, `${read.join(', ')} 파일을 읽었어요.\n`)   // 질문은 실패 안내들 뒤에 한 번만
+  }, '파일을 읽는 중이에요…')
 }
 
 // ② 화면에서 고친 칸 → 서버가 역량·등급을 다시 계산
