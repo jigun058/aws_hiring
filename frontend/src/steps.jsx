@@ -113,7 +113,7 @@ export function Step2({ s }) {
   const comps = c.competencies.filter(k => !c.removed.includes(k.kw_idx))
   return (
     <div className="flex flex-col gap-7">
-      <H1 title="경험 카드 초안을 확인해 주세요" sub="AI 도우미가 대화를 보고 만든 초안이에요. 틀린 곳은 바로 고치고, 맞으면 저장해 주세요." />
+      <H1 title="경험 카드 초안을 확인해 주세요" sub={`${s.cards.every(x => x.card.made_by === 'rule') ? '대화를 보고 자동으로 정리한' : 'AI 도우미가 대화를 보고 만든'} 초안이에요. 틀린 곳은 바로 고치고, 맞으면 저장해 주세요.`} />
       <div className="grid grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[minmax(220px,270px)_minmax(0,1fr)] gap-5 xl:gap-7 items-start">
         <div className="flex flex-col gap-2 sticky top-0">
           <div className="text-[16px] font-bold text-sub pb-1">카드 초안 {s.cards.length}장</div>
@@ -136,7 +136,9 @@ export function Step2({ s }) {
         <div className="border border-line rounded-[20px] p-6 xl:p-9 flex flex-col gap-9 shadow-[0_2px_8px_rgba(14,35,80,.05)]">
           <div className="flex items-center gap-4 text-[15px] font-bold">
             <span className="text-sub">카드 {i + 1} / {s.cards.length}</span>
-            <span className="inline-flex items-center gap-1.5 text-ai"><AiDot size={9} />초안</span>
+            {c.card.made_by === 'rule'
+              ? <span className="text-sub">자동 정리 초안</span>
+              : <span className="inline-flex items-center gap-1.5 text-ai"><AiDot size={9} />AI 초안</span>}
             <span className="flex-1" />
             {c.saved && <span className="text-ok text-[16px]">✓ 내 경험에 저장했어요</span>}
           </div>

@@ -29,6 +29,7 @@ def test_llm_down_uses_rules(client, monkeypatch):
     monkeypatch.setattr(llm, 'converse', fake([RuntimeError('down')] * 10))
     r = client.post('/api/interview/start', json=dict(text='회사에서 5년 동안 경리 업무를 했습니다. 엑셀로 장부를 정리했습니다.', type='job')).json()
     c = r['cards'][0]
+    assert c['card']['made_by'] == 'rule'
     assert c['card']['slot_status']['actions'] == 'filled'
     assert c['question']['slot'] == 'role' and c['question']['question'] == '이 일에서 직접 맡으신 일은 무엇이었나요?'
     a = client.post('/api/interview/answer', json=dict(card=c['card'], answer='경리 담당으로 장부랑 급여 정리를 맡았어요')).json()
@@ -53,6 +54,7 @@ def test_llm_split_and_fabricated_quote_dropped(client, monkeypatch):
     ]))
     cards = client.post('/api/interview/start', json=dict(text=text)).json()['cards']
     assert [c['card']['type'] for c in cards] == ['job', 'community']
+    assert {c['card']['made_by'] for c in cards} == {'ai'}
     assert cards[0]['card']['slots']['results'] == []
     assert cards[0]['question']['question'] == '마트에서 주로 맡으신 일은 무엇이었나요?'
     assert '아이' not in cards[1]['question']['question']
@@ -129,3 +131,14 @@ def test_edit_card_field(client, monkeypatch):
     assert client.post('/api/interview/edit', json=dict(card=e['card'], field='type', value='hobby')).status_code == 400
     e = client.post('/api/interview/edit', json=dict(card=e['card'], field='actions', value='')).json()
     assert e['card']['slot_status']['actions'] == 'missing' and 'actions' not in e['card']['locked']
+
+
+def test_llm_endpoints_rate_limited(client, monkeypatch):
+    from careerlens import api as X
+    monkeypatch.setattr(X, 'PER_MIN', 2)
+    monkeypatch.setattr(X, '_hits', X.defaultdict(X.deque))
+    # 앞쪽 주소를 바꿔도 CloudFront가 붙인 맨 뒤 주소로 센다
+    codes = [client.post('/api/chat', json={}, headers={'X-Forwarded-For': f'1.1.1.{i}, 9.9.9.9'}).status_code for i in range(3)]
+    assert codes == [422, 422, 429]
+    assert client.post('/api/chat', json={}, headers={'X-Forwarded-For': '8.8.8.8'}).status_code == 422   # 다른 사람은 그대로
+    assert client.post('/api/recommend', json={}, headers={'X-Forwarded-For': '9.9.9.9'}).status_code == 422   # AI 안 쓰는 API는 안 셈

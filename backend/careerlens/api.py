@@ -5,9 +5,12 @@
 """
 import json
 import re
+import time
+from collections import defaultdict, deque
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -20,6 +23,28 @@ from common import TODAY
 from recommender import WEIGHTS
 
 app = FastAPI(title='CareerLens')
+
+# AI(Bedrock)를 부르는 API만 접속 주소별로 횟수를 센다. 한 바퀴 시연이 AI 호출 약 14번.
+# shortcut: 서버 메모리에 세므로 재시작하면 초기화되고 서버가 여러 대면 안 맞는다. 서버를 늘리면 CloudFront WAF로 옮긴다.
+LIMITED = {'/api/interview/start', '/api/interview/answer', '/api/explain', '/api/chat'}
+PER_MIN, PER_DAY = 40, 800
+_hits = defaultdict(deque)
+
+
+@app.middleware('http')
+async def limit_llm(request, call_next):
+    if request.method == 'POST' and request.url.path in LIMITED:
+        # CloudFront는 실제 접속 주소를 X-Forwarded-For 맨 뒤에 붙인다(앞쪽은 사용자가 꾸밀 수 있음)
+        ip = (request.headers.get('x-forwarded-for') or '').split(',')[-1].strip() or request.client.host
+        now, q = time.time(), _hits[ip]
+        while q and q[0] < now - 86400:
+            q.popleft()
+        if len(q) >= PER_DAY:
+            return JSONResponse({'detail': '오늘 AI 도우미 사용 한도를 넘었어요. 내일 다시 이용해 주세요.'}, status_code=429)
+        if sum(t > now - 60 for t in q) >= PER_MIN:
+            return JSONResponse({'detail': '요청이 너무 잦아요. 1분쯤 뒤에 다시 시도해 주세요.'}, status_code=429)
+        q.append(now)
+    return await call_next(request)
 R = Recommender()
 A = postings.load_analysis()
 CardType = Literal['job', 'internship', 'part_time', 'self_employed', 'project', 'education', 'community', 'family_care', 'certificate']
@@ -221,12 +246,14 @@ def interview_start(req: InterviewStart):
     """경험 글 → 경험 카드 초안(여러 장일 수 있음)과 카드마다 첫 질문."""
     text = I.mask_pii(req.text)
     exps = llm.extract_experiences(text)
+    made_by = 'ai' if exps else 'rule'   # 화면이 "AI 초안"을 붙일지 정한다
     if not exps:   # LLM 실패 → 글 전체를 카드 하나로, 슬롯은 규칙으로
         exps = [dict(activity=req.title or '내 경험', type=req.type or 'job', slots=I.rule_extract(text))]
     out = []
     for e in exps:
         typ = req.type if (req.type and len(exps) == 1) else (e.get('type') if e.get('type') in llm.TYPES else 'job')
         card = I.new_card(req.title if len(exps) == 1 and req.title else str(e.get('activity') or '내 경험')[:60], typ, text)
+        card['made_by'] = made_by
         for x in e.get('slots') or []:
             if isinstance(x, dict):
                 I.fill(card, x.get('slot'), x.get('value'), x.get('quote'), 'chat_0', is_estimate=bool(x.get('is_estimate')))
