@@ -85,6 +85,22 @@ def test_chat_calls_tool_and_answers(client, monkeypatch):
     assert tool_result['jobs'][0]['name'] == '경리 사무원'
 
 
+def test_chat_knows_screen_and_hides_ids(client, monkeypatch):
+    systems = []
+
+    def converse(system, messages, max_tokens=1000, tools=None):
+        systems.append(system)
+        return {'stopReason': 'end_turn', 'output': {'message': {'role': 'assistant', 'content': [{'text': '경리 사무원(OCC0001)은 잘 맞아요.'}]}}}
+    monkeypatch.setattr(llm, 'converse', converse)
+    card = dict(title='회사 경리', type='job', text='회사에서 5년 동안 경리 업무를 했습니다. 엑셀로 장부를 정리했습니다.')
+    job = client.post('/api/recommend', json=dict(cards=[card])).json()['jobs'][0]
+    post = client.post('/api/postings', json=dict(cards=[card], occupation_id=job['occupation_id'])).json()['postings'][0]
+    r = client.post('/api/chat', json=dict(messages=[dict(role='user', text='이 공고에서 부족한 게 뭐예요?')], cards=[card],
+                                           occupation_id=job['occupation_id'], posting_id=post['posting_id'])).json()
+    assert r['reply'] == '경리 사무원은 잘 맞아요.'
+    assert f"보고 있는 직무: {job['name']}" in systems[0] and post['company'] in systems[0]
+
+
 def test_chat_bedrock_down(client, monkeypatch):
     monkeypatch.setattr(llm, 'converse', fake([RuntimeError('down')]))
     r = client.post('/api/chat', json=dict(messages=[dict(role='user', text='안녕하세요')])).json()

@@ -3,6 +3,7 @@
 로그인이 없어 서버는 사용자 상태를 들고 있지 않는다. 화면이 경험 카드를 들고 있다가 매 요청에 함께 보낸다.
 (경험 카드 저장(DynamoDB)과 에이전트 대화는 다음 작업)
 """
+import json
 import re
 from typing import Literal, Optional
 
@@ -321,7 +322,36 @@ AGENT_SYSTEM = ('너는 CareerLens의 커리어 도우미다. 다시 일을 찾�
                 '공고는 서울시 일자리포털에 2026년 11월 12일 기준으로 올라온 수도권(서울·경기·인천) 공고다. '
                 '도구 결과의 d_day(마감까지 남은 날)는 2026년 11월 12일 기준이다. "마감까지 n일 남았다", "서두르라"고 말하지 않고, 필요하면 "11월 12일 기준 D-n"이라고 쓴다. '
                 '답은 대화창에 들어가는 3~5문장의 평범한 글이다. 표, 굵은 글씨, 이모지를 쓰지 않는다. 공고를 소개할 때는 3건까지 회사·지역·급여만 한 줄씩. '
-                '"부담 없이 지원하실 수 있어요", "~해 볼 만합니다"처럼 단정하거나 권하지 않는다. ' + llm.STYLE)
+                '"부담 없이 지원하실 수 있어요", "~해 볼 만합니다"처럼 단정하거나 권하지 않는다. '
+                '직무 번호(OCC로 시작)는 도구에만 넣고 답에는 쓰지 않는다. 직무는 이름으로 말한다. '
+                '사용자가 "이 직무", "이 공고", "첫 번째 공고"라고 하면 아래 "지금 화면"에 적힌, 사용자가 보고 있는 직무·공고를 뜻한다. '
+                '도구를 부른다거나 결과를 확인했다는 말 없이 바로 답한다. '
+                '공고 원문 주소는 없으니 공고 페이지를 직접 보라고 하지 않는다. '
+                '교육과정의 훈련비·개강일·기관은 search_courses 결과에 있으니 물으면 도구로 찾아 그 값을 말한다. '
+                '실제 본인 부담금과 지원 자격은 고용24에서 확인한다고 덧붙인다(HRD-Net이라고 쓰지 않는다). '
+                + llm.STYLE)
+
+
+def _post_brief(p):
+    """공고 카드 → 에이전트에게 넘길 요약."""
+    return dict(company=p['company'], title=p['title'], region=f"{p['sido']} {p['sigungu']}", wage=p['wage'], d_day=p['d_day'], career=p['career'],
+                has_required=[x['keyword'] for x in p['required'] if x['has']], missing_required=[x['keyword'] for x in p['required'] if not x['has']],
+                needs_license=p['needs_license'], info_thin=p['thin'])
+
+
+def _screen(req):
+    """에이전트에게 알려 줄 지금 화면: 단계, 보고 있는 직무 이름, 고른 공고 요약."""
+    s = f'지금 화면: {req.step or "알 수 없음"}. 경험 카드 {len(req.cards)}장.'
+    if req.occupation_id in R.occ_idx:
+        name = R.occ.set_index('occupation_id').occupation_name[req.occupation_id]
+        s += f' 보고 있는 직무: {name}(도구에 넣을 번호 {req.occupation_id}).'
+    hit = R.posts[R.posts.posting_id == req.posting_id] if req.posting_id else R.posts.iloc[:0]
+    if req.cards and not hit.empty:
+        cards = _internal(req.cards)
+        kws = set(R.recommend_cards(cards, n_posts=0)['user_keywords'])
+        p = postings.card(next(hit.itertuples()), A.get(req.posting_id), kws, postings.user_license_ids(cards))
+        s += ' 보고 있는 공고: ' + json.dumps(_post_brief(p), ensure_ascii=False)
+    return s
 
 
 def _resolve_occ(x):
@@ -344,16 +374,13 @@ def _tool(name, args, req):
         return dict(error='아직 저장한 경험 카드가 없어요. 경험을 먼저 입력해야 해요.')
     if name == 'recommend_jobs':
         r = recommend(CardsReq(cards=cards))
-        return dict(jobs=[dict(occupation_id=j['occupation_id'], name=j['name'], score=j['score'], evidence=[e['keyword'] for e in j['evidence']][:6],
+        return dict(jobs=[dict(occupation_id=j['occupation_id'], name=j['name'], score=round(j['score'], 1), evidence=[e['keyword'] for e in j['evidence']][:6],
                                gaps=j['gaps'][:4], cautions=j['cautions'], open_postings=j['open_postings']) for j in r['jobs']])
     oid = _resolve_occ(str(args.get('occupation_id') or req.occupation_id or ''))
     if name == 'search_postings':
         f = PostingFilters(**{k: args[k] for k in ('sido', 'hours', 'deadline_days') if args.get(k) is not None})
         r = job_postings(PostingsReq(cards=cards, occupation_id=oid, filters=f, limit=5))
-        return dict(total=r['total'], postings=[dict(company=p['company'], title=p['title'], region=f"{p['sido']} {p['sigungu']}", wage=p['wage'],
-                                                     d_day=p['d_day'], career=p['career'], has_required=[x['keyword'] for x in p['required'] if x['has']],
-                                                     missing_required=[x['keyword'] for x in p['required'] if not x['has']], needs_license=p['needs_license'],
-                                                     info_thin=p['thin']) for p in r['postings']])
+        return dict(total=r['total'], postings=[_post_brief(p) for p in r['postings']])
     if name == 'search_courses':
         r = course_plan(CoursesReq(cards=cards, occupation_id=oid, posting_id=args.get('posting_id') or req.posting_id))
         return dict(gaps=[dict(name=g['name'], label=g['label'], courses=[dict(name=c['name'], institution=c['institution'], start=c['start'],
@@ -363,7 +390,7 @@ def _tool(name, args, req):
 
 @app.post('/api/chat')
 def chat(req: ChatReq):
-    ctx = f'지금 화면: {req.step or "알 수 없음"}. 경험 카드 {len(req.cards)}장.' + (f' 보고 있는 직무: {req.occupation_id}.' if req.occupation_id else '')
+    ctx = _screen(req)
     msgs = [{'role': m.role, 'content': [{'text': m.text}]} for m in req.messages]
     used = []
     try:
@@ -372,7 +399,8 @@ def chat(req: ChatReq):
             out = resp['output']['message']
             calls = [c['toolUse'] for c in out['content'] if 'toolUse' in c]
             if resp.get('stopReason') != 'tool_use' or not calls:
-                return dict(reply=''.join(c.get('text', '') for c in out['content']).strip(), tools=used)
+                reply = ''.join(c.get('text', '') for c in out['content'])
+                return dict(reply=re.sub(r'\s*\(OCC\d+\)', '', reply).strip(), tools=used)   # 프롬프트로 막아도 새는 직무 번호
             msgs.append(out)
             results = []
             for c in calls:

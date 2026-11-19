@@ -93,8 +93,8 @@ def interpret_answer(slot, question, answer):
 
 def explain_job(job, evidence):
     """추천 이유 2~3문장(DESIGN 5절). 엔진 결과와 카드 인용만 넘기고, 넘기지 않은 숫자가 나오면 버린다."""
-    facts = dict(직무=job['name'], 점수=job['score'], 근거역량=[e['keyword'] for e in evidence if e.get('card')],
-                 경험인용=[e['quote'] for e in evidence if e.get('quote')][:4], 부족역량=job.get('gaps', [])[:3],
+    facts = dict(직무=job['name'], 점수=round(job['score'], 1), 근거역량=[e['keyword'] for e in evidence if e.get('card')],
+                 경험인용=list(dict.fromkeys(e['quote'] for e in evidence if e.get('quote')))[:4], 부족역량=job.get('gaps', [])[:3],
                  주의=job.get('cautions', []))
     system = ('너는 직무 추천 이유를 설명한다. 주어진 사실만 써서 2~3문장으로 쓴다. 근거가 된 사용자 경험을 하나 이상 언급한다. '
               '"지원해 볼 만합니다"처럼 단정하지 않는다. 점수를 합격 가능성처럼 말하지 않는다. 주어진 것 말고 다른 역량이나 숫자를 쓰지 않는다. ' + STYLE)
