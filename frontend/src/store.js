@@ -87,6 +87,7 @@ function stale() { set(p => p.maxStep > 2 ? { maxStep: 2, jobs: null, posts: nul
 export function cardsIn() {
   const use = state.cards.some(c => c.saved) ? state.cards.filter(c => c.saved) : state.cards
   return use.map(c => ({ ...c.card_in, removed: c.removed }))   // 지운 역량은 서버가 카드와 엔진 추출 양쪽에서 뺀다
+    .filter(c => c.text?.trim())   // 사용자가 칸을 모두 비운 카드는 추천에 쓰지 않는다
 }
 
 function ask(c, intro = '') {
@@ -171,6 +172,16 @@ export function askSlot(id, slot) {
 export function removeComp(id, kw) { patchCard(id, c => ({ removed: [...c.removed, kw] })); stale() }
 export function undoRemove(id) { patchCard(id, { removed: [] }); stale() }
 export function saveCard(id) { patchCard(id, { saved: true }); stale() }
+export function deleteCard(id) {
+  const c = card(id)
+  if (!c || !confirm(`‘${c.card.activity}’ 카드를 지울까요? 지운 카드는 되돌릴 수 없어요.`)) return
+  set(p => ({
+    cards: p.cards.filter(x => x.id !== id), cardSel: Math.max(0, Math.min(p.cardSel, p.cards.length - 2)),
+    activeCard: p.activeCard === id ? null : p.activeCard, ...(p.screen === 'work' && p.step > 2 ? { step: 2 } : {}),
+  }))
+  stale()
+  say(`‘${c.card.activity}’ 카드를 지웠어요.` + (state.cards.length ? ' 직무 추천을 다시 받으면 결과에 반영돼요.' : ''))
+}
 
 // ---------------- 단계 이동과 ③ ④ ⑤ ----------------
 export function start() {
@@ -199,6 +210,7 @@ export function toCards() {
 export function recommend() {
   if (state.maxStep >= 3 && state.jobs) return goStep(3)
   if (!state.cards.some(c => c.saved)) set(p => ({ cards: p.cards.map(c => ({ ...c, saved: true })) }))
+  if (!cardsIn().length) return say('추천에 쓸 경험 내용이 없어요. 카드의 빈칸을 채우거나 대화창에 해 오신 일을 적어 주세요.', { error: true })
   const m = state.meta
   return load(3, `직무 ${m ? fmt(m.occupations) + '개' : '정보'}와 비교하는 중이에요`, '내 역량과 각 직무가 하는 일을 견주고 있어요.', async () => {
     const r = await api('recommend', { cards: cardsIn() })

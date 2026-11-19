@@ -224,8 +224,8 @@ _CAT_ORDER = {c: 0 for c in ('C1', 'C2', 'C3', 'C7', 'C8')} | {'C6': 1, 'C4': 2,
 
 def competencies(card):
     """슬롯 인용에서 역량을 찾고 P3 3.1로 등급을 매긴다. → {kw_idx: {level, match, quote}} (cards.build_card와 같은 모양)"""
-    if card['type'] == 'certificate':
-        return build_card(card['activity'], 'certificate', ' '.join(card['sources'].values()))['comps']
+    if card['type'] == 'certificate':   # 자격증은 '행동' 칸(한 줄에 자격증 하나)에서 찾는다. 사용자가 지우면 빠진다
+        return build_card(card['activity'], 'certificate', card_text(card))['comps']
     sl = card['slots']
     has_result = any(not is_vague('results', r['value']) for r in sl['results'])
     has_role = card['slot_status']['role'] == 'filled'
@@ -255,7 +255,9 @@ def card_text(card):
     sl = card['slots']
     parts = [x['quote'] for s in ('role', 'purpose') if sl[s] and sl[s]['quote'] for x in [sl[s]]]
     parts += [x['quote'] for s in ('actions', 'results', 'tools') for x in sl[s]]
-    return ' '.join(parts) or ' '.join(card['sources'].values())
+    if parts or any(k.startswith('edit_') for k in card['sources']):
+        return ' '.join(parts)   # 사용자가 칸을 비웠으면 빈 글(원문으로 되살리지 않음). 빈 카드는 화면이 추천에서 뺀다
+    return ' '.join(card['sources'].values())
 
 
 # ---------------- LLM이 실패했을 때의 규칙 대체 ----------------
@@ -266,10 +268,14 @@ _SKIP = re.compile(r'건너|넘어가|패스|다음 ?질문|말하기 싫|말씀
 _STOP = re.compile(r'^(?:그만|끝|됐어요|이제 됐)')
 
 
+def sentences(text):
+    return [x.strip() for x in re.split(r'(?<=[.!?])\s+|\n+', text) if x.strip()]
+
+
 def rule_extract(text):
     """경험 글 → 슬롯 후보(정규식). 시뮬레이션의 판정식과 같은 기준이다."""
     out = []
-    for s in [x.strip() for x in re.split(r'(?<=[.!?])\s+|\n+', text) if x.strip()]:
+    for s in sentences(text):
         if re.search(r'맡|담당', s):
             out.append(dict(slot='role', value=s, quote=s))
         if RESULT.search(s):

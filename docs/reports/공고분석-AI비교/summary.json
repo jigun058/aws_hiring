@@ -1,0 +1,58 @@
+{
+ "sample": 300,
+ "blind_sample": 67,
+ "systems": {
+  "rule": {
+   "labeled_clauses": 336,
+   "req_pref_accuracy": 0.588,
+   "req_precision": 0.659,
+   "req_recall": 0.5,
+   "low_after": {
+    "low": 17
+   }
+  },
+  "nova": {
+   "labeled_clauses": 336,
+   "req_pref_accuracy": 0.632,
+   "req_precision": 0.508,
+   "req_recall": 0.574,
+   "name": "Nova Lite",
+   "failed": 9,
+   "calls": 367,
+   "bad_quotes": 377,
+   "input_tokens": 380967,
+   "output_tokens": 328555,
+   "cost_usd": 0.1204,
+   "cost_per_posting": 0.00033,
+   "sec_per_posting": 3.05,
+   "low_after": {
+    "low": 16,
+    "medium": 1
+   },
+   "low_added_kw": 0.06,
+   "type_agree_with_rule": 0.46
+  },
+  "haiku": {
+   "labeled_clauses": 336,
+   "req_pref_accuracy": 0.64,
+   "req_precision": 0.684,
+   "req_recall": 0.481,
+   "name": "Claude Haiku 4.5",
+   "failed": 1,
+   "calls": 367,
+   "bad_quotes": 25,
+   "input_tokens": 309549,
+   "output_tokens": 219776,
+   "cost_usd": 1.4084,
+   "cost_per_posting": 0.00384,
+   "sec_per_posting": 2.24,
+   "low_after": {
+    "low": 16,
+    "medium": 1
+   },
+   "low_added_kw": 0.06,
+   "type_agree_with_rule": 0.486
+  }
+ },
+ "low_targets": 17
+}

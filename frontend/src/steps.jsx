@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  NO_FILTERS, TYPE_LABEL, askSlot, editField, fmt, focusChat, pickJob, pickPost, removeComp, saveCard, selectedPost, set, setFilters, undoRemove,
+  NO_FILTERS, TYPE_LABEL, askSlot, deleteCard, editField, fmt, focusChat, pickJob, pickPost, removeComp, saveCard, selectedPost, set, setFilters, undoRemove,
 } from './store'
 import { AiDot, Btn, GRADE, Grade, H1, Pill, Spinner, won } from './ui'
 
@@ -73,6 +73,7 @@ export function Step1({ s }) {
 
 // ---------------- ② 경험 카드 ----------------
 const LONG = [['purpose', '목적 · 무엇을 위한 일이었나요'], ['role', '역할 · 어떤 자리에서 일했나요'], ['actions', '행동 · 실제로 한 일 (한 줄에 하나)'], ['results', '성과 · 나아진 점 (한 줄에 하나)']]
+const CERT = [['actions', '자격증·면허 (한 줄에 하나)']]
 const ASK_ME = new Set(['missing', 'vague', 'unknown_by_user', 'skipped'])
 const slotText = v => Array.isArray(v) ? v.map(x => x.value).join('\n') : v?.value || ''
 const missingCount = c => c.card.type === 'certificate' ? 0
@@ -133,14 +134,15 @@ export function Step2({ s }) {
             )
           })}
         </div>
-        <div className="border border-line rounded-[20px] p-6 xl:p-9 flex flex-col gap-9 shadow-[0_2px_8px_rgba(14,35,80,.05)]">
-          <div className="flex items-center gap-4 text-[15px] font-bold">
+        <div key={c.id} className="border border-line rounded-[20px] p-6 xl:p-9 flex flex-col gap-9 shadow-[0_2px_8px_rgba(14,35,80,.05)]">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px] font-bold whitespace-nowrap">
             <span className="text-sub">카드 {i + 1} / {s.cards.length}</span>
             {c.card.made_by === 'rule'
               ? <span className="text-sub">자동 정리 초안</span>
               : <span className="inline-flex items-center gap-1.5 text-ai"><AiDot size={9} />AI 초안</span>}
+            {c.saved && <span className="text-ok">✓ 저장함</span>}
             <span className="flex-1" />
-            {c.saved && <span className="text-ok text-[16px]">✓ 내 경험에 저장했어요</span>}
+            <button onClick={() => deleteCard(c.id)} className="border-0 bg-transparent text-warn text-[16px] font-bold underline underline-offset-4">이 카드 지우기</button>
           </div>
           <div className="grid grid-cols-2 2xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.2fr)] gap-5">
             <div className="col-span-2 2xl:col-span-1 flex"><Field c={c} f="activity" label="활동명" /></div>
@@ -153,7 +155,7 @@ export function Step2({ s }) {
             <Field c={c} f="period" label="기간" />
           </div>
           <div className="flex flex-col gap-7">
-            {LONG.filter(([f]) => c.card.slot_status[f] !== 'not_asked' || slotText(c.card.slots[f])).map(([f, label]) => <Field key={f} c={c} f={f} label={label} long />)}
+            {(c.card.type === 'certificate' ? CERT : LONG.filter(([f]) => c.card.slot_status[f] !== 'not_asked' || slotText(c.card.slots[f]))).map(([f, label]) => <Field key={f} c={c} f={f} label={label} long />)}
           </div>
           <div className="flex flex-col gap-3 pt-8 border-t border-line2">
             <div className="flex items-baseline justify-between gap-3 flex-wrap">

@@ -257,6 +257,9 @@ def interview_start(req: InterviewStart):
         for x in e.get('slots') or []:
             if isinstance(x, dict):
                 I.fill(card, x.get('slot'), x.get('value'), x.get('quote'), 'chat_0', is_estimate=bool(x.get('is_estimate')))
+        if typ == 'certificate' and not card['slots']['actions']:   # 자격증 글을 화면에서 고칠 수 있게 '행동' 칸에 문장마다 넣는다
+            for s in I.sentences(text):
+                I.fill(card, 'actions', s, s, 'chat_0')
         out.append(_interview_out(card, _ask_next(card)))
     return dict(cards=out)
 
@@ -356,6 +359,9 @@ AGENT_SYSTEM = ('너는 CareerLens의 커리어 도우미다. 다시 일을 찾�
                 '공고 원문 주소는 없으니 공고 페이지를 직접 보라고 하지 않는다. '
                 '교육과정의 훈련비·개강일·기관은 search_courses 결과에 있으니 물으면 도구로 찾아 그 값을 말한다. '
                 '실제 본인 부담금과 지원 자격은 고용24에서 확인한다고 덧붙인다(HRD-Net이라고 쓰지 않는다). '
+                '사용자가 경험 카드 내용이 사실과 다르다고 하면(예: 그 자격증이 없다, 그 일을 하지 않았다) 너는 카드를 고칠 수 없다. '
+                '도구를 부르지 말고, 화면 위쪽 단계 표시의 "② 경험 카드"에서 그 줄을 지우거나 고치고, 카드 전체가 틀렸으면 "이 카드 지우기"를 누른 뒤 '
+                '직무 추천을 다시 받으면 결과에 반영된다고 안내한다. 법정 자격이 필요한 직무는 자격이 없으면 "자격 취득 후 지원 가능"으로 바뀐다고 짧게 덧붙일 수 있다. '
                 + llm.STYLE)
 
 
@@ -368,7 +374,8 @@ def _post_brief(p):
 
 def _screen(req):
     """에이전트에게 알려 줄 지금 화면: 단계, 보고 있는 직무 이름, 고른 공고 요약."""
-    s = f'지금 화면: {req.step or "알 수 없음"}. 경험 카드 {len(req.cards)}장.'
+    s = f'지금 화면: {req.step or "알 수 없음"}. 경험 카드 {len(req.cards)}장'
+    s += (': ' + ' / '.join(f'{c.title}({c.type}) "{c.text[:80]}"' for c in req.cards[:8]) + '.') if req.cards else '.'
     if req.occupation_id in R.occ_idx:
         name = R.occ.set_index('occupation_id').occupation_name[req.occupation_id]
         s += f' 보고 있는 직무: {name}(도구에 넣을 번호 {req.occupation_id}).'

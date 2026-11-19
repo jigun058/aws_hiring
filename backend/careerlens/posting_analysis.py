@@ -36,16 +36,22 @@ def _norm(s):
     return re.sub(r'[\s\W_]+', '', s)
 
 
+_FILLER = re.compile(r'기타|및|안내|주요|등|조건|요건|사항|내용|방법|일정|지원|서류')
+
+
 def _header(text):
-    """머리말이면 구간 신호('우대' / '필수' / None=초기화), 아니면 False. 짧은 구절의 앞부분만 본다."""
-    head = text[:12]
-    if len(_norm(text)) > 14:
+    """머리말이면 구간 신호('우대' / '필수' / None=초기화), 아니면 False. "우대사항: …"처럼 콜론 앞만 본다.
+    머리말 낱말과 군말을 빼고 남는 글자가 있으면 내용이다("경력자 우대", "근무시간 협의 가능"은 머리말이 아님)."""
+    label = re.split(r'[:：]', text, maxsplit=1)[0]
+    if len(_norm(label)) > 14:
         return False
-    if _HEADER_PREF.search(head):
+    if _norm(_FILLER.sub('', _HEADER_RESET.sub('', _HEADER_REQ.sub('', _HEADER_PREF.sub('', label))))):
+        return False
+    if _HEADER_PREF.search(label):
         return '우대'
-    if _HEADER_REQ.search(head):
+    if _HEADER_REQ.search(label):
         return '필수'
-    if _HEADER_RESET.search(head):
+    if _HEADER_RESET.search(label):
         return None
     return False
 
@@ -123,6 +129,13 @@ def _license_id(name):
     return _LIC_ID.get(re.sub(r'\s|\d급$|특급$', '', name)) or _LIC_ID.get(re.sub(r'\s', '', name))
 
 
+def confidence_of(requirements, licenses):
+    """F2-4: 점수용 역량 3개 이상 + 필수·우대·자격 신호 → high, 2개 이상 → medium, 그 밖 low."""
+    n = len(requirements)
+    signal = any(r['type'] in ('필수', '우대') for r in requirements) or any(v['type'] in ('필수', '우대') for v in licenses)
+    return 'high' if n >= 3 and signal else 'medium' if n >= 2 else 'low'
+
+
 def analyze(row, posting_licenses=()):
     """row: posting_id·occupation_id·career와 FIELDS의 칸. posting_licenses: [(license_id, license_name, requirement_level)]"""
     clauses = split_clauses(row)
@@ -174,9 +187,7 @@ def analyze(row, posting_licenses=()):
     body = ' '.join(str(row.get(k) or '') for k in ('job_description_raw', 'career_edu_text'))
     my = MIN_YEARS.search(body)
     requirements = sorted(reqs.values(), key=lambda r: (_RANK[r['type']], r['clause_id']))
-    n = len(requirements)
-    signal = any(r['type'] in ('필수', '우대') for r in requirements) or any(v['type'] in ('필수', '우대') for v in lic.values())
-    confidence = 'high' if n >= 3 and signal else 'medium' if n >= 2 else 'low'
+    confidence = confidence_of(requirements, lic.values())
     return dict(posting_id=row.get('posting_id'), occupation_id=oid, requirements=requirements, licenses=list(lic.values()),
                 display_only=list(display.values()), filters=list(filters.values()), conditions=conds,
                 career=dict(field=row.get('career'), min_years=int(my.group(1)) if my else None, quote=career_quote),

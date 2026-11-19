@@ -72,6 +72,13 @@ def test_header_section_ends_at_next_header():
     assert r['unmapped_requirements'] == []
 
 
+def test_short_preference_is_content_not_header():
+    # "경력자 우대"·"운전 가능자 우대"가 머리말로 잘못 잡혀 분석에서 빠지던 문제(11/19, B21 표본 검토 중 발견)
+    r = run('창고 물품 정리  경력자 우대  운전 가능자 우대  근무시간 협의 가능')
+    assert [t for _, t in types(r)] == ['업무', '경력', '우대', '조건']
+    assert '차량 운전' in {x['keyword'] for x in r['requirements'] if x['type'] == '우대'}
+
+
 def test_number_leftovers_are_dropped():
     assert [c['text'] for c in A.split_clauses(dict(duty_text='1 / 2 / 지게차 운전'))] == ['지게차 운전']
 

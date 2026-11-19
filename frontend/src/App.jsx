@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import {
-  PERSONAS, STEPS, STEP_LABEL, TYPE_LABEL, cardsIn, courses, deletePoint, focusChat, get, goStep, loadPersona, loadPoint, points,
+  PERSONAS, STEPS, STEP_LABEL, TYPE_LABEL, cardsIn, courses, deleteCard, deletePoint, focusChat, get, goStep, loadPersona, loadPoint, points,
   postings, recommend, reset, savePoint, selectedPost, send, set, start, toCards, useApp,
 } from './store'
 import { AiDot, Btn, EmptyArt, Logo, Spinner } from './ui'
@@ -276,7 +276,10 @@ function MyDrawer({ s }) {
               {c.card.slots.period?.value && <><span className="text-[#A6B1C2]">|</span><span className="text-sub">{c.card.slots.period.value}</span></>}</div>
             <div className="text-[20px] font-extrabold text-ink">{c.card.activity}</div>
             <div className="text-[16px] text-sub">역량 · {c.competencies.filter(k => !c.removed.includes(k.kw_idx)).map(k => k.keyword).join(' · ') || '아직 없음'}</div>
-            <Btn kind="outline" className="self-start mt-1" onClick={() => set({ drawer: false, screen: 'work', step: 2, cardSel: s.cards.indexOf(c), maxStep: Math.max(s.maxStep, 2) })}>카드 열어 고치기</Btn>
+            <div className="flex items-center gap-4 mt-1">
+              <Btn kind="outline" onClick={() => set({ drawer: false, screen: 'work', step: 2, cardSel: s.cards.indexOf(c), maxStep: Math.max(s.maxStep, 2) })}>카드 열어 고치기</Btn>
+              <button onClick={() => deleteCard(c.id)} className="border-0 bg-transparent text-warn text-[16px] font-bold underline underline-offset-4">지우기</button>
+            </div>
           </div>
         )) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-3.5 px-3 py-10">

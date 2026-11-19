@@ -22,9 +22,9 @@ def client():
     return _client
 
 
-def converse(system, messages, max_tokens=1000, tools=None):
-    """Bedrock Converse 한 번. 시험에서는 이 함수를 바꿔 끼운다."""
-    kw = dict(modelId=MODEL, system=[{'text': system}], messages=messages,
+def converse(system, messages, max_tokens=1000, tools=None, model=None):
+    """Bedrock Converse 한 번. 시험에서는 이 함수를 바꿔 끼운다. model: 기본(Sonnet) 말고 다른 모델(공고 AI 보완 비교 등)"""
+    kw = dict(modelId=model or MODEL, system=[{'text': system}], messages=messages,
               inferenceConfig={'temperature': 0, 'maxTokens': max_tokens})
     if tools:
         kw['toolConfig'] = {'tools': tools}
@@ -35,12 +35,20 @@ def _text(resp):
     return ''.join(c.get('text', '') for c in resp['output']['message']['content'])
 
 
-def ask_json(system, user, max_tokens=1000):
-    """JSON 하나를 돌려받는다. 형식 오류면 1회 재요청, 그래도 실패하면 None(P3 F3-1 예외 처리)."""
+def ask_json(system, user, max_tokens=1000, model=None, usage=None):
+    """JSON 하나를 돌려받는다. 형식 오류면 1회 재요청, 그래도 실패하면 None(P3 F3-1 예외 처리).
+    usage(dict)를 주면 토큰 수를 더해 둔다(비용 기록용)."""
     msgs = [{'role': 'user', 'content': [{'text': user}]}]
     for _ in range(2):
         try:
-            t = _text(converse(system + '\n반드시 JSON 하나만 출력한다. 설명이나 코드 블록 표시를 붙이지 않는다.', msgs, max_tokens))
+            resp = converse(system + '\n반드시 JSON 하나만 출력한다. 설명이나 코드 블록 표시를 붙이지 않는다.', msgs, max_tokens,
+                            **({'model': model} if model else {}))
+            if usage is not None:
+                u = resp.get('usage', {})
+                for k in ('inputTokens', 'outputTokens'):
+                    usage[k] = usage.get(k, 0) + u.get(k, 0)
+                usage['calls'] = usage.get('calls', 0) + 1
+            t = _text(resp)
             return json.loads(re.sub(r'^```(?:json)?|```$', '', t.strip()).strip())
         except json.JSONDecodeError:
             continue

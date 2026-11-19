@@ -142,3 +142,30 @@ def test_llm_endpoints_rate_limited(client, monkeypatch):
     assert codes == [422, 422, 429]
     assert client.post('/api/chat', json={}, headers={'X-Forwarded-For': '8.8.8.8'}).status_code == 422   # 다른 사람은 그대로
     assert client.post('/api/recommend', json={}, headers={'X-Forwarded-For': '9.9.9.9'}).status_code == 422   # AI 안 쓰는 API는 안 셈
+
+
+def test_cleared_fields_stay_cleared_and_change_recommendation(client, monkeypatch):
+    monkeypatch.setattr(llm, 'converse', fake([RuntimeError('down')] * 10))
+    start = lambda **k: client.post('/api/interview/start', json=k).json()['cards'][0]
+    edit = lambda c, f, v: client.post('/api/interview/edit', json=dict(card=c['card'], field=f, value=v)).json()
+    job = start(title='물류센터 근무', type='job', text='물류센터에서 10년 동안 지게차로 상하차와 운반을 했습니다. 입고 검수와 재고 관리도 맡았습니다.')
+    cleared = edit(edit(job, 'actions', ''), 'role', '')
+    assert cleared['card_in']['text'] == '' and cleared['competencies'] == []   # 처음 글로 되살아나지 않는다
+    cert = start(title='자격증', type='certificate', text='지게차운전기능사 자격증과 1종 보통 운전면허를 보유하고 있습니다.')
+    assert cert['card']['slots']['actions'] and '지게차 운전' in {k['keyword'] for k in cert['competencies']}   # 고칠 수 있게 칸에 보임
+    no_fork = edit(cert, 'actions', '1종 보통 운전면허를 보유하고 있습니다.')
+    assert '지게차 운전' not in {k['keyword'] for k in no_fork['competencies']}
+    score = lambda cards: {j['name']: j['score'] for j in client.post('/api/recommend', json=dict(cards=cards)).json()['jobs']}
+    assert score([job['card_in'], no_fork['card_in']]).get('지게차 운전원', 0) < score([job['card_in'], cert['card_in']])['지게차 운전원']
+
+
+def test_chat_told_cards_and_how_to_fix_them(client, monkeypatch):
+    seen = {}
+
+    def converse(system, messages, max_tokens=1000, tools=None):
+        seen['system'] = system
+        return {'output': {'message': {'content': [{'text': '② 경험 카드에서 고쳐 주세요.'}]}}}
+    monkeypatch.setattr(llm, 'converse', converse)
+    card = dict(title='자격증', type='certificate', text='지게차운전기능사 자격증을 보유하고 있습니다.')
+    client.post('/api/chat', json=dict(messages=[dict(role='user', text='사실 나 지게차 자격증 없어')], step='③ 직무 추천', cards=[card]))
+    assert '지게차운전기능사 자격증을 보유' in seen['system'] and '이 카드 지우기' in seen['system']
