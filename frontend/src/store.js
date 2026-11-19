@@ -25,26 +25,29 @@ const INIT = {
   busy: null, err: null, typing: false, drawer: false, demo: false, meta: null, postsLoading: false,
 }
 
+function hydrate(v) {
+  const reasons = Object.fromEntries(Object.entries(v.reasons || {}).filter(([, r]) => r.reason))   // 쓰던 중이던 이유는 버림
+  return { ...INIT, ...v, reasons }
+}
 function restore() {
   try {
     const v = JSON.parse(localStorage.getItem(KEY))
-    if (!v) return INIT
-    const reasons = Object.fromEntries(Object.entries(v.reasons || {}).filter(([, r]) => r.reason))   // 쓰던 중이던 이유는 버림
-    return { ...INIT, ...v, reasons }
+    return v ? hydrate(v) : INIT
   } catch { return INIT }
 }
 
 let state = restore()
 const subs = new Set()
 export const get = () => state
+function persisted() {
+  const o = { ...state }
+  TRANSIENT.forEach(k => delete o[k])
+  return o
+}
 export function set(p) {
   state = { ...state, ...(typeof p === 'function' ? p(state) : p) }
   subs.forEach(f => f())
-  try {
-    const o = { ...state }
-    TRANSIENT.forEach(k => delete o[k])
-    localStorage.setItem(KEY, JSON.stringify(o))
-  } catch { /* 사생활 보호 창 등: 저장 없이 계속 */ }
+  try { localStorage.setItem(KEY, JSON.stringify(persisted())) } catch { /* 사생활 보호 창 등: 저장 없이 계속 */ }
 }
 export const useApp = () => useSyncExternalStore(cb => (subs.add(cb), () => subs.delete(cb)), get)
 
@@ -297,6 +300,29 @@ export function reset(extra = {}) {
   try { localStorage.removeItem(KEY) } catch { /* 없음 */ }
   set({ ...INIT, meta: state.meta, ...extra })
 }
+
+// 중간 지점: 지금 상태를 통째로 저장해 두고 버튼 하나로 돌아간다(서버·AI를 다시 부르지 않음).
+// 앱 상태와 따로 두어 "처음부터 다시 시작"해도 남는다. 이 브라우저에만 있다.
+const PKEY = 'careerlens-points'
+const SCREEN_LABEL = { landing: '첫 화면', story: '재취업 이야기', analyze: '공고 분석' }
+export function points() {
+  try { return JSON.parse(localStorage.getItem(PKEY)) || [] } catch { return [] }
+}
+function writePoints(ps) {
+  try { localStorage.setItem(PKEY, JSON.stringify(ps)); return true } catch { return false }
+}
+export function savePoint() {
+  const s = state, job = s.step >= 3 && s.jobs?.[s.jobSel]
+  const name = [s.screen === 'work' ? STEP_LABEL[s.step] : SCREEN_LABEL[s.screen], `카드 ${s.cards.length}장`, job && job.name,
+    new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })].filter(Boolean).join(' · ')
+  if (!writePoints([...points(), { id: uid(), name, state: persisted() }])) alert('브라우저 저장 공간이 부족해요. 안 쓰는 중간 지점을 지워 주세요.')
+  set({})   // 서랍을 다시 그림
+}
+export function loadPoint(id) {
+  const p = points().find(x => x.id === id)
+  if (p) set({ ...hydrate(p.state), meta: state.meta, demo: true })
+}
+export function deletePoint(id) { writePoints(points().filter(x => x.id !== id)); set({}) }
 
 export function loadPersona(p) {
   reset({ demo: true, msgs: [{ id: uid(), r: 'a', t: GREETING, step: 1 }] })

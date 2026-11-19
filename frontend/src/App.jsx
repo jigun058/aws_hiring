@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import {
-  PERSONAS, STEPS, STEP_LABEL, TYPE_LABEL, cardsIn, courses, focusChat, get, goStep, loadPersona, postings, recommend, reset,
-  selectedPost, send, set, start, toCards, useApp,
+  PERSONAS, STEPS, STEP_LABEL, TYPE_LABEL, cardsIn, courses, deletePoint, focusChat, get, goStep, loadPersona, loadPoint, points,
+  postings, recommend, reset, savePoint, selectedPost, send, set, start, toCards, useApp,
 } from './store'
 import { AiDot, Btn, EmptyArt, Logo, Spinner } from './ui'
 import { Step1, Step2, Step3, Step4, Step5 } from './steps'
@@ -301,7 +301,7 @@ function Demo({ s }) {
     <button onClick={() => set({ demo: !s.demo })} title="시연 도구"
       className="absolute left-2.5 bottom-2.5 z-[60] h-7 px-2.5 rounded-md border border-line bg-white/85 text-[11px] text-faint opacity-50 hover:opacity-100 font-mono tracking-[.04em]">DEMO</button>
     {s.demo && (
-      <div className="msg-in absolute left-2.5 bottom-[46px] z-[61] w-[340px] bg-[#16181D] text-[#E6E8EE] rounded-xl overflow-hidden shadow-[0_20px_48px_rgba(0,0,0,.4)] font-mono text-[13px] leading-[1.4]">
+      <div className="msg-in absolute left-2.5 bottom-[46px] z-[61] w-[340px] max-h-[calc(100vh-60px)] overflow-y-auto bg-[#16181D] text-[#E6E8EE] rounded-xl shadow-[0_20px_48px_rgba(0,0,0,.4)] font-mono text-[13px] leading-[1.4]">
         <div className="h-2 bg-[repeating-linear-gradient(135deg,#F5C84C_0_10px,#16181D_10px_20px)]" />
         <div className="flex items-center justify-between px-3.5 pt-3 pb-1.5">
           <span className="font-bold tracking-[.06em] text-[#F5C84C]">시연 도구 · 발표용</span>
@@ -329,6 +329,16 @@ function Demo({ s }) {
             <button onClick={() => set({ screen: 'analyze' })} className={`${b} border-[#3A3F4B]`}>공고 분석</button>
             <button onClick={() => set({ chatRatio: 1 / 3, chatOpen: true })} className={`${b} border-[#3A3F4B]`}>대화창 너비 처음대로</button>
             <button onClick={() => set({ chatOpen: !get().chatOpen })} className={`${b} border-[#3A3F4B]`}>대화창 접기/펴기</button>
+          </div>
+          <div className="flex flex-col gap-1.5"><span className="text-[#8B93A5]">중간 지점 (서버·AI를 다시 부르지 않음)</span>
+            <button onClick={savePoint} disabled={!!s.busy || s.typing} className={`${b} border-[#3A3F4B]`}>+ 지금 상태 저장</button>
+            {points().map(p => (
+              <div key={p.id} className="flex gap-1">
+                <button onClick={() => loadPoint(p.id)} disabled={!!s.busy || s.typing} title="이 지점으로 돌아가기"
+                  className="flex-1 min-w-0 text-left px-2.5 py-1.5 rounded-lg border border-[#3A3F4B] bg-[#1F232B] text-[#E6E8EE] text-[12px] disabled:opacity-40">↩ {p.name}</button>
+                <button onClick={() => deletePoint(p.id)} title="지우기" className={`${b} border-[#3A3F4B] px-2.5`}>✕</button>
+              </div>
+            ))}
           </div>
           <div className="text-[#8B93A5] text-[12px]">카드 {s.cards.length}장 · 추천에 쓰는 카드 {s.cards.length ? cardsIn().length : 0}장</div>
         </div>
