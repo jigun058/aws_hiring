@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* 시안 v2(docs/design/CareerLens v2.dc.html)의 색 */
+@theme {
+  --font-sans: 'Nanum Gothic', 'NanumGothic', 'Apple SD Gothic Neo', sans-serif;
+  --color-ink: #0E2350;
+  --color-brand: #12307A;
+  --color-brand-dark: #0C2461;
+  --color-body: #1E2B45;
+  --color-sub: #4A5872;
+  --color-muted: #67748C;
+  --color-faint: #8A94A6;
+  --color-line: #DCE3EC;
+  --color-line2: #E8EDF3;
+  --color-field: #C3CEDC;
+  --color-dash: #8FA2BC;
+  --color-soft: #F3F5F8;
+  --color-hover: #F7FAFD;
+  --color-ok: #17704A;
+  --color-warn: #8A5300;
+  --color-err: #B42318;
+  --color-accent: #24619E;
+  --color-ai: #4B46B8;
+  --color-teal: #0F6E7A;
+}
+
+html, body { margin: 0; height: 100%; overflow-y: hidden; overflow-x: auto; background: #fff; }
+button, input, textarea, select { font-family: inherit; }
+button:not(:disabled) { cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #3FA9E6; outline-offset: 2px; }
+.field { border: 1px solid var(--color-field); border-radius: 8px; background: #fff; color: var(--color-ink); }
+.field:focus { border-color: var(--color-brand); outline: none; box-shadow: 0 0 0 1px var(--color-brand); }
+.ai-dot { display: inline-block; flex: none; transform: rotate(45deg); background: linear-gradient(135deg, #6C7BFF, #49B8F0); }
+.spin { border-radius: 50%; border-style: solid; border-color: var(--color-line); border-top-color: var(--color-brand); animation: cl-spin 1s linear infinite; }
+.msg-in { animation: cl-up .25s ease-out; }
+.pulse { animation: cl-pulse 1.2s ease-in-out infinite; }
+.slide-in { animation: cl-in .22s ease-out; }
+@keyframes cl-spin { to { transform: rotate(360deg) } }
+@keyframes cl-pulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
+@keyframes cl-in { from { transform: translateX(32px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes cl-up { from { transform: translateY(8px); opacity: 0 } to { transform: none; opacity: 1 } }

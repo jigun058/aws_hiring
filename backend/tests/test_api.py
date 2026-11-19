@@ -16,6 +16,7 @@ def client():
 def test_meta(client):
     m = client.get('/api/meta').json()
     assert (m['occupations'], m['postings'], m['data_date']) == (810, 38185, '2026-11-12')
+    assert m['sido'] == sorted(m['sigungu']) and '송파구' in m['sigungu']['서울']
 
 
 def test_flow_park(client):
@@ -57,3 +58,16 @@ def test_unknown_occupation_is_404(client):
 def test_analyze_posting(client):
     r = client.post('/api/analyze-posting', json=dict(text='- 급여: 1,548,000원 - 즉시 출근 가능자  5톤 운전가능자')).json()
     assert [(x['keyword'], x['type']) for x in r['requirements']] == [('차량 운전', '필수')]
+
+
+def test_removed_competency_leaves_score(client):
+    """화면에서 지운 역량은 엔진이 카드 글에서 다시 찾아도 점수·공고 비교에서 빠진다."""
+    card = PARK[0]
+    full = client.post('/api/recommend', json=dict(cards=[card])).json()
+    assert '지게차 운전' in full['user_keywords']
+    cut = client.post('/api/recommend', json=dict(cards=[dict(card, removed=[56])])).json()   # 56 = 지게차 운전
+    assert '지게차 운전' not in cut['user_keywords']
+    assert all(e['keyword'] != '지게차 운전' for j in cut['jobs'] for e in j['evidence'])
+    assert [j['score'] for j in cut['jobs']] != [j['score'] for j in full['jobs']]
+    both = client.post('/api/recommend', json=dict(cards=[dict(card, removed=[56]), PARK[1]])).json()   # 다른 카드엔 남아 있음
+    assert both['user_keywords'] == client.post('/api/recommend', json=dict(cards=[card, PARK[1]])).json()['user_keywords']

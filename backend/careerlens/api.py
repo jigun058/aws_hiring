@@ -7,10 +7,12 @@ import re
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from careerlens import cards as C
 from careerlens import courses, interview as I, llm, postings
+from careerlens.paths import BACKEND
 from careerlens.posting_analysis import analyze
 from careerlens.recommend import Recommender, is_paid
 from common import TODAY
@@ -35,6 +37,7 @@ class CardIn(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
     paid: Optional[bool] = None
     competencies: Optional[list[Competency]] = None   # 없으면 서버가 규칙으로 붙인다(초안)
+    removed: list[int] = Field(default_factory=list, max_length=200)   # 사용자가 지운 역량(kw_idx). 엔진이 글에서 다시 찾아도 뺀다
 
 
 class CardsReq(BaseModel):
@@ -73,6 +76,8 @@ def _internal(cards):
             b['comps'] = {x.kw_idx: dict(level=x.level, match=x.match, quote=x.quote) for x in c.competencies if x.kw_idx in C.D}
         if c.paid is not None:
             b['paid'] = c.paid
+        b['removed'] = {C.D[k][1] for k in c.removed if k in C.D}
+        b['comps'] = {k: v for k, v in b['comps'].items() if k not in c.removed}
         out.append(b)
     return out
 
@@ -97,8 +102,9 @@ def health():
 @app.get('/api/meta')
 def meta():
     """화면 문구에 쓰는 실제 숫자와 데이터 기준일(BACKLOG B12·B13)."""
+    p = R.posts[['sido', 'sigungu']].dropna().drop_duplicates()
     return dict(occupations=len(R.occ_ids), postings=len(A), courses=courses.N_COURSES, data_date=str(TODAY.date()),
-                sido=sorted(R.posts.sido.dropna().unique().tolist()))
+                sido=sorted(p.sido.unique().tolist()), sigungu={s: sorted(g.sigungu.tolist()) for s, g in p.groupby('sido')})
 
 
 @app.post('/api/cards/draft')
@@ -244,6 +250,25 @@ def interview_answer(req: InterviewAnswer):
     return res
 
 
+class InterviewEdit(BaseModel):
+    card: dict
+    field: Literal[I.EDITABLE]
+    value: str = Field(max_length=2000)
+
+
+@app.post('/api/interview/edit')
+def interview_edit(req: InterviewEdit):
+    """② 경험 카드 화면에서 고친 칸을 반영하고 역량·등급을 다시 계산한다. 물어보던 질문은 그대로 둔다."""
+    card = req.card
+    if req.field == 'type' and req.value not in llm.TYPES:
+        raise HTTPException(400, f'모르는 경험 유형이에요: {req.value}')
+    try:
+        I.edit(card, req.field, req.value)
+        return _interview_out(card, card.get('last_question'))
+    except (KeyError, TypeError, AttributeError):
+        raise HTTPException(400, '카드 형식이 올바르지 않아요')
+
+
 class ExplainReq(BaseModel):
     job: dict
 
@@ -361,3 +386,9 @@ def chat(req: ChatReq):
     except Exception:   # Bedrock 오류·시간 초과: 상태 안내(DESIGN 5절)
         return dict(reply='지금은 답을 드리기 어려워요. 잠시 뒤 다시 시도해 주세요.', tools=used, error=True)
     return dict(reply='질문이 길어져 답을 정리하지 못했어요. 조금 더 짧게 물어봐 주시겠어요?', tools=used, error=True)
+
+
+# 화면(frontend/ 빌드 결과)을 같은 주소에서 낸다. API 경로를 모두 등록한 뒤에 붙여야 /api가 가려지지 않는다.
+WEB = BACKEND.parent / 'frontend' / 'dist'
+if WEB.is_dir():
+    app.mount('/', StaticFiles(directory=WEB, html=True), name='web')

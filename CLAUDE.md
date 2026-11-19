@@ -30,6 +30,8 @@
 - 공고 분석(P2 규칙 처리) 전량: `cd backend && ../.venv/bin/python scripts/analyze_postings.py` → `backend/data/derived/posting_analysis.jsonl`(git 밖, 약 3분, 63MB). 구절 목록은 파일에 없으니 필요하면 `posting_analysis.analyze()`로 다시 계산.
 - LLM(Bedrock)은 `careerlens/llm.py` 한 곳에서만 부른다. LLM 결과는 코드가 검사하고(`interview.quote_ok`·`safe_question`, 숫자 검사), 실패하면 None → 호출한 쪽이 규칙 대체를 쓴다. 시험은 `llm.converse`를 가짜로 바꿔 끼워 실제 호출 없이 돈다(`tests/test_api_interview.py`). 실제 연결 확인은 `AWS_PROFILE=tae ../.venv/bin/python scripts/smoke_llm.py`(호출 약 6번).
 - 서버: `cd backend && ../.venv/bin/uvicorn careerlens.api:app --reload` (준비 약 3.5초, 메모리 약 700MB). 단계별 API는 `careerlens/api.py`, 목록은 DESIGN.md 5절.
+- 화면: `frontend/`(Vite + React + Tailwind v4, JSX). 상태와 서버 호출은 모두 `src/store.js`(브라우저 저장소에 저장), 단계 화면은 `src/steps.jsx`, 첫 화면·공고 분석·재취업 이야기는 `src/pages.jsx`. 준비 `cd frontend && npm install`. 개발 `npm run dev`(5173, `/api`는 8000으로 넘김), 배포용 `npm run build` → `frontend/dist/`(git 밖)를 FastAPI가 `/`에서 낸다. 글꼴은 Google Fonts 나눔고딕(TTF는 파일당 4.5MB라 안 씀).
+- 화면 확인은 헤드리스 브라우저로 한다: 스크래치 폴더에 `npm install playwright` 후 스크립트로 흐름을 돌려 1280·1024px 캡처. LLM 없이 보려면 서버를 `AWS_PROFILE=none-offline AWS_EC2_METADATA_DISABLED=true`로 띄운다(규칙 대체로 돎, 비용 없음).
 - 시험: `cd backend && ../.venv/bin/pytest -q`. 로직팀 미해결 건은 `xfail(strict=True)`로 고정한다(고쳐지면 시험이 알려 줌).
 
 ## Git

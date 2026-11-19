@@ -96,3 +96,20 @@ def test_agent_tool_accepts_occupation_name():
     assert _resolve_occ('OCC0410') == 'OCC0410'
     assert _resolve_occ('요양보호사') == 'OCC0410'
     assert _resolve_occ('없는 직무') == '없는 직무'
+
+
+def test_edit_card_field(client, monkeypatch):
+    """② 화면에서 고친 칸: 원문이 되고 잠기며, 역량이 다시 계산된다. 질문은 그대로."""
+    monkeypatch.setattr(llm, 'converse', fake([RuntimeError('down')] * 10))
+    c = client.post('/api/interview/start', json=dict(text='회사에서 5년 동안 경리 업무를 했습니다.', type='job')).json()['cards'][0]
+    q = c['card']['last_question']
+    e = client.post('/api/interview/edit', json=dict(card=c['card'], field='actions', value='엑셀로 급여 장부를 정리했습니다.\n세금계산서를 발행했습니다.')).json()
+    assert [x['value'] for x in e['card']['slots']['actions']] == ['엑셀로 급여 장부를 정리했습니다.', '세금계산서를 발행했습니다.']
+    assert 'actions' in e['card']['locked'] and e['question'] == q
+    assert '스프레드시트(엑셀)' in {x['keyword'] for x in e['competencies']}
+    assert '엑셀로 급여 장부를 정리했습니다.' in e['card_in']['text']
+    e = client.post('/api/interview/edit', json=dict(card=e['card'], field='type', value='part_time')).json()
+    assert e['card_in']['type'] == 'part_time' and e['card_in']['paid'] is True
+    assert client.post('/api/interview/edit', json=dict(card=e['card'], field='type', value='hobby')).status_code == 400
+    e = client.post('/api/interview/edit', json=dict(card=e['card'], field='actions', value='')).json()
+    assert e['card']['slot_status']['actions'] == 'missing' and 'actions' not in e['card']['locked']

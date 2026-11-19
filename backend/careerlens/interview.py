@@ -174,6 +174,34 @@ def apply_answer(card, slot, answer, interpretation, source_id):
     return []
 
 
+EDITABLE = ('activity', 'type', 'period', 'role', 'purpose', 'actions', 'results')
+
+
+def edit(card, field, value):
+    """F3-7 화면에서 사용자가 고친 칸. 고친 글이 그 칸의 원문(인용)이 되고, 칸을 잠가 이후 인터뷰 답이 덮어쓰지 않는다.
+    actions·results는 한 줄이 항목 하나."""
+    value = mask_pii((value or '').strip())
+    if field == 'activity':
+        card['activity'] = value[:60] or card['activity']
+        return
+    if field == 'type':
+        card['type'], card['is_paid_work'] = value, value in PAID
+        return
+    sid = f'edit_{field}'
+    card['sources'][sid] = value
+    if field in LIST_SLOTS:
+        card['slots'][field] = [dict(value=s, quote=s, source=sid, by='user', is_estimate=False)
+                                for s in (x.strip() for x in value.splitlines()) if s]
+    else:
+        card['slots'][field] = dict(value=value, quote=value, source=sid, by='user', is_estimate=False) if value else None
+    if card['slot_status'].get(field) != 'not_asked':
+        card['slot_status'][field] = 'filled' if value else 'missing'
+    if value and field not in card['locked']:
+        card['locked'].append(field)
+    elif not value and field in card['locked']:
+        card['locked'].remove(field)
+
+
 def safe_question(phrased, base):
     """LLM이 다듬은 질문이 금지 주제를 건드리거나 길면 기본 문장(P3 F3-3 예외 처리)."""
     if not phrased or FORBIDDEN.search(phrased) or len(re.findall(r'[.?!]', phrased)) > 2:

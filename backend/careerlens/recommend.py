@@ -6,6 +6,7 @@
 - 시뮬레이션 6번: 거의 같은 공고, 같은 회사·제목 공고를 하나만
 - 시뮬레이션 7번: 유급 근무 경험이 없으면 '경력' 공고를 뒤로
 - 시뮬레이션 5번(C4·C5 제외)은 보류(BACKLOG B1): 엔진 그대로
+- 사용자가 카드에서 지운 역량(card['removed'], 역량 이름)은 엔진이 글에서 다시 찾아도 뺀다. 다른 카드에 남아 있으면 둔다
 """
 import threading
 
@@ -40,7 +41,9 @@ class Recommender(CareerMatcher):
     def extract(self, text):
         c = super().extract(text)
         if self._override:
-            levels, ctx = self._override
+            levels, ctx, removed = self._override
+            for kw in removed:
+                c['keywords'].pop(kw, None)
             for kw, f in c['keywords'].items():
                 if kw in levels:
                     f['evidence_strength'] = COEF[levels[kw]]
@@ -54,8 +57,9 @@ class Recommender(CareerMatcher):
         text = ' '.join(c['text'] for c in cards)
         ctxs = [TYPE_CONTEXT[c['type']] for c in cards if c['type'] in TYPE_CONTEXT] if use_card_context else []
         ctx = max(ctxs, key=CTX_W.get, default=None)
+        removed = set().union(*(c.get('removed', ()) for c in cards)) - set(levels)
         with self._lock:
-            self._override = (levels, ctx)
+            self._override = (levels, ctx, removed)
             try:
                 r = self.recommend(text)
                 card = self.extract(text)
