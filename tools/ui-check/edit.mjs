@@ -1,0 +1,17 @@
+// 경험 카드 고치기·지우기(B36): 박물류 자격증 카드를 고치고 지운 뒤 추천 상위가 바뀌는지
+import { open } from './lib.mjs'
+const { p, shot, idle, persona, state, close } = await open('edit')
+const top = async () => (await p.locator('main').innerText()).split('\n').filter(x => /운전원|관리원|종사원|분류원/.test(x)).slice(0, 3).join(' | ')
+await persona(/박물류/)
+await p.getByRole('button', { name: '직무 추천 받기 →' }).click(); await idle(); await p.waitForTimeout(800)
+console.log('before:', await top())
+await p.getByTitle('2단계로 돌아가기').click()
+await p.locator('button', { hasText: '자격증' }).first().click(); await shot('1-cert')
+const ta = p.locator('textarea').first()
+await ta.fill('1종 보통 운전면허를 보유하고 있습니다.'); await ta.blur(); await p.waitForTimeout(1200); await shot('2-edited')
+await p.getByRole('button', { name: '직무 추천 받기 →' }).click(); await idle(); await p.waitForTimeout(800)
+console.log('after edit:', await top())
+await p.getByTitle('2단계로 돌아가기').click()
+await p.getByRole('button', { name: '이 카드 지우기' }).click(); await p.waitForTimeout(500); await shot('3-deleted')
+console.log('cards left:', (await state()).cards.map(c => c.card.activity))
+await close()
