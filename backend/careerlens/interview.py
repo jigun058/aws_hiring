@@ -135,7 +135,7 @@ def next_question(card):
     if st['results'] == 'filled' and res and not any(re.search(r'\d', r['value']) for r in res) and not _asked(card, 'results', 'number'):
         q, opts, _ = BANK['results_number']   # ⑤ 정성 성과의 수치, 1회만
         return dict(slot='results', kind='number', question=q, options=opts)
-    for s in ('period', 'team_size'):   # ⑥
+    for s in ('period',):   # ⑥ 기간만. 팀 규모는 역량·점수에 쓰이지 않아 묻지 않는다(11/20 로직팀 요청). 답에 나오면 채우기는 한다
         if st[s] == 'missing' and not _asked(card, s):
             q, opts, _ = BANK[s]
             return dict(slot=s, kind='basic', question=q, options=opts)

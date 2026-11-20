@@ -173,6 +173,8 @@ function Chat({ s }) {
   const [drag, setDrag] = useState(null)   // 끄는 중의 비율(끝나면 저장)
   const listRef = useRef(null), boxRef = useRef(null)
   const [input, setInput] = useState('')
+  const [picked, setPicked] = useState([])   // 여러 개 고를 수 있는 예시 답 중 고른 것
+  useEffect(() => setPicked([]), [s.msgs.at(-1)?.id])
   useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, [s.msgs.length, s.msgs.at(-1)?.t, s.typing, s.chatOpen])
   useEffect(() => {
     if (drag === null) return
@@ -193,8 +195,9 @@ function Chat({ s }) {
     </button>
   )
   const ratio = drag ?? s.chatRatio
-  const go = t => { send(t); setInput('') }
+  const go = t => { send(t); setInput(''); setPicked([]) }
   const last = s.msgs.at(-1)
+  const toggle = c => setPicked(p => p.includes(c) ? p.filter(x => x !== c) : [...p, c])
   const agentMode = s.step >= 3
   return <>
     <div ref={boxRef} onMouseDown={e => { e.preventDefault(); document.body.style.cursor = 'col-resize'; setDrag(s.chatRatio) }}
@@ -233,9 +236,20 @@ function Chat({ s }) {
                 </div>)}
             {m === last && m.chips && !s.typing && (
               <div className="flex flex-wrap gap-2">
-                {m.chips.map(c => (
-                  <button key={c} onClick={() => go(c)} className="min-h-[44px] px-[18px] py-2 rounded-full border border-field bg-white text-brand text-[16px] font-bold shadow-[0_2px_6px_rgba(14,35,80,.06)] text-left hover:border-brand">{c}</button>
-                ))}
+                {m.chips.map((c, i) => {
+                  const multi = i < (m.multi || 0), on = picked.includes(c)
+                  return (
+                    <button key={c} onClick={() => multi ? toggle(c) : go(c)} aria-pressed={multi ? on : undefined}
+                      className={`min-h-[44px] px-[18px] py-2 rounded-full border text-[16px] font-bold shadow-[0_2px_6px_rgba(14,35,80,.06)] text-left hover:border-brand ${on ? 'border-brand bg-brand text-white' : 'border-field bg-white text-brand'}`}>
+                      {multi && on ? '✓ ' : ''}{c}</button>
+                  )
+                })}
+              </div>
+            )}
+            {m === last && m.multi > 0 && !s.typing && (
+              <div className="flex items-center gap-3">
+                <Btn size="sm" onClick={() => go(picked.join(', '))} disabled={!picked.length}>
+                  {picked.length ? `고른 답 ${picked.length}개 보내기` : '예시 답을 여러 개 골라도 돼요'}</Btn>
               </div>
             )}
           </div>

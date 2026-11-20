@@ -107,3 +107,17 @@ def test_same_input_same_question():
     """F3-2 검증 기준: 같은 입력 → 같은 결과."""
     a, b = I.new_card('카페', 'part_time', '카페 아르바이트'), I.new_card('카페', 'part_time', '카페 아르바이트')
     assert I.next_question(a) == I.next_question(b)
+
+
+def test_team_size_not_asked():
+    """11/20 로직팀 요청: 팀 규모는 역량·점수에 쓰이지 않아 묻지 않는다. 기간은 묻는다."""
+    from careerlens import interview as I
+    c = I.new_card('경리', 'job', '장부 정리 담당. 장부를 엑셀로 정리했다. 마감이 하루 빨라졌다. 업무라서 했다.')
+    for slot, q in [('role', '장부 정리 담당'), ('actions', '장부를 엑셀로 정리했다'), ('results', '마감이 하루 빨라졌다'), ('purpose', '업무라서 했다')]:
+        I.fill(c, slot, q, q, 'chat_0')
+    asked = []
+    while not (q := I.next_question(c)).get('end'):
+        asked.append(q['slot'])
+        I.record_question(c, q)
+        I.apply_answer(c, q['slot'], '건너뛸게요', dict(kind='skip'), f'chat_{len(c["sources"])}')
+    assert 'period' in asked and 'team_size' not in asked

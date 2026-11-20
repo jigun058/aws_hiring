@@ -93,7 +93,8 @@ export function cardsIn() {
 function ask(c, intro = '') {
   set({ activeCard: c.id })
   say((intro ? intro + '\n' : '') + c.question.question,
-    { kind: 'interview', chips: [...(c.question.options || []), '잘 모르겠어요', '그만 물어봐도 돼요'] })
+    { kind: 'interview', chips: [...(c.question.options || []), '잘 모르겠어요', '그만 물어봐도 돼요'],
+      multi: c.question.kind === 'conflict' ? 0 : (c.question.options || []).length })   // 앞의 예시 답은 여러 개 골라 한 번에 보낸다(③ 확인 질문은 하나만)
 }
 
 function askNextOrFinish(doneTitle) {
