@@ -149,6 +149,7 @@ def phrase_question(q, card):
 def interpret_answer(slot, question, answer):
     """P3 F3-4: 답변 → {kind, slots[{slot, value, quote, is_estimate}]}. 인용 검사는 interview.apply_answer가 한다."""
     system = ('너는 인터뷰 답변을 정리한다. kind: content(내용 있음) / unknown(모름·기억 안 남) / skip(건너뛰기) / stop(그만) / other(다른 경험 이야기). '
+              '같은 경험의 내용을 바로잡는 말("경리가 아니라 영업 관리였어요", "사실 3년이었어요")은 other가 아니라 content다. '
               '한 답변에 여러 슬롯이 있으면 함께 채운다(role, purpose, actions, results, tools, period, team_size, challenges). '
               'quote는 답변에서 그대로 복사한 조각이다. 답변에 없는 내용은 만들지 않는다. "한 30% 정도"처럼 대략이면 is_estimate=true. ' + STYLE)
     user = (f'질문한 슬롯: {slot}\n질문: {question}\n답변: {answer}\n'
