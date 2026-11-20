@@ -176,6 +176,7 @@ export function Step2({ s }) {
                   <div className="flex items-center gap-4">
                     <div className="flex-1 min-w-0 flex items-baseline gap-x-3.5 gap-y-1 flex-wrap">
                       <span className="text-[19px] font-extrabold text-ink">{k.keyword}</span><Grade lv={k.level} />
+                      {k.match === 'course' && <span className="break-keep text-[14px] font-bold text-sub">수료 과정: {k.course}</span>}
                       {k.match === 'llm_choice' && <span className="inline-flex items-center gap-1.5 break-keep text-[14px] font-bold text-ai"><AiDot size={9} />AI가 고른 후보 · 아직 점수에 넣지 않아요</span>}
                     </div>
                     <div className="shrink-0 flex gap-2">

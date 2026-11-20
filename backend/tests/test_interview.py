@@ -121,3 +121,18 @@ def test_team_size_not_asked():
         I.record_question(c, q)
         I.apply_answer(c, q['slot'], '건너뛸게요', dict(kind='skip'), f'chat_{len(c["sources"])}')
     assert 'period' in asked and 'team_size' not in asked
+
+
+def test_course_name_links_course_competencies_at_l1():
+    """P3 4.2 수료증: 고용24 과정명과 맞으면 그 과정의 역량을 L1로(match='course'). 수료 이야기가 아니면 붙이지 않는다."""
+    from careerlens import interview as I
+    from careerlens.cards import D
+    c = I.new_card('요양보호사 과정', 'education', '작년에 요양보호사 자격취득과정을 수료했어요.')
+    I.fill(c, 'actions', '요양보호사 과정 수료', '요양보호사 자격취득과정을 수료했어요', 'chat_0')
+    comps = {D[k][1]: v for k, v in I.competencies(c).items()}
+    got = {k: v for k, v in comps.items() if v['match'] == 'course'}   # 문장에서 이미 찾은 역량은 그대로, 과정에서는 빠진 것만 더한다
+    assert '가사·생활 지원' in got and comps['신체활동 지원']['match'] != 'course'
+    assert all(v['level'] == 'L1' and '요양보호사' in v['course'] for v in got.values())
+    j = I.new_card('요양원 근무', 'job', '요양원에서 5년 동안 어르신 식사를 도와 드렸어요.')
+    I.fill(j, 'actions', '어르신 식사 도움', '요양원에서 5년 동안 어르신 식사를 도와 드렸어요', 'chat_0')
+    assert not any(v['match'] == 'course' for v in I.competencies(j).values())

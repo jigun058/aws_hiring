@@ -30,6 +30,30 @@ def _view(c):
                 start=s[2], end=s[3], fee=s[4], region=s[5], url=s[6])
 
 
+# P3 4.2 수료증: 사용자가 쓴 과정명 ↔ 고용24 과정명. 꾸밈말(괄호, '_육성', 자격·취득·과정 같은 말)을 떼고 비교한다.
+# [기본값] 과정명 핵심이 4글자 이상이고 문장에 들어 있으면(짧은 활동명은 반대로 과정명 안에 들어 있어도) 맞는 것으로 본다.
+# 여러 과정이 맞으면 핵심이 가장 긴(가장 구체적인) 과정, 같으면 번호가 앞선 과정.
+_BRACKET = re.compile(r'[\(\[『「【<][^\)\]』」】>]*[\)\]』」】>]|_[^_]*$')
+_FILLER = re.compile(r'자격증?|취득|과정|양성|필기|실기|수료|훈련|및')
+
+
+def _core(t):
+    return re.sub(r'[^가-힣A-Za-z0-9]', '', _FILLER.sub('', _BRACKET.sub(' ', t)))
+
+
+_CORES = sorted(((_core(c['t']), cid) for cid, c in CRS.items()), key=lambda x: (-len(x[0]), x[1]))
+_CORES = [(k, cid) for k, cid in _CORES if len(k) >= 4]
+
+
+def match(text):
+    """글 → 이름이 맞는 고용24 과정(dict) 또는 None."""
+    t = _core(text)
+    hit = next((cid for k, cid in _CORES if k in t), None)
+    if hit is None and 4 <= len(t) <= 20:   # 활동명처럼 짧은 글: 과정명 안에 들어 있으면
+        hit = next((cid for k, cid in reversed(_CORES) if t in k), None)
+    return CRS[hit] if hit else None
+
+
 def for_keyword(kw_idx, oid=None, n=3):
     fit = lambda cid: next((f for o, f, _ in CRS[cid]['occ'] if o == oid), 0)
     out = []

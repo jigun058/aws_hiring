@@ -362,7 +362,8 @@ _CAT_ORDER = {c: 0 for c in ('C1', 'C2', 'C3', 'C7', 'C8')} | {'C6': 1, 'C4': 2,
 def competencies(card):
     """슬롯 인용에서 역량을 찾고 P3 3.1로 등급을 매긴다. → {kw_idx: {level, match, quote}} (cards.build_card와 같은 모양)"""
     if card['type'] == 'certificate':   # 자격증은 '행동' 칸(한 줄에 자격증 하나)에서 찾는다. 사용자가 지우면 빠진다
-        return build_card(card['activity'], 'certificate', card_text(card))['comps']
+        comps = build_card(card['activity'], 'certificate', card_text(card))['comps']
+        return {**_course_comps([card['activity']] + sentences(card_text(card))), **comps}
     sl = card['slots']
     has_result = any(not is_vague('results', r['value']) for r in sl['results'])
     has_role = card['slot_status']['role'] == 'filled'
@@ -387,9 +388,27 @@ def competencies(card):
         if kind == 'action' and kw in D and kw not in comps:
             lv = 'L1' if LEARN.search(s) else 'L3' if has_result else 'L2'
             comps[kw] = dict(level=lv, match='llm_choice', quote=s, reason=why)
+    for k, v in _course_comps([card['activity']] + [s for s, _ in sents]).items():
+        comps.setdefault(k, v)
     comps = {k: v for k, v in comps.items() if v['level'] != 'L0'}
     keep = sorted(comps, key=lambda k: (_CAT_ORDER.get(D[k][0], 3), -RANK[comps[k]['level']], k))[:MAX_COMPETENCIES]
     return {k: comps[k] for k in keep}
+
+
+_COURSE_MARK = re.compile(r'과정|' + LEARN.pattern)
+
+
+def _course_comps(texts):
+    """P3 4.2 수료증: 수료·수강·과정 이야기에 고용24 과정명이 있으면 그 과정의 역량을 L1(배움)로 붙인다(match='course').
+    맞는 과정이 없으면 붙이지 않는다. 그 문장 자체에서 찾은 역량은 위에서 이미 L1로 들어간다."""
+    from careerlens import courses   # courses.json을 읽으므로 쓸 때 불러온다
+    out = {}
+    for s in texts:
+        c = _COURSE_MARK.search(s or '') and courses.match(s)
+        for k, _rel, _src in (c['k'] if c else []):
+            if k in D:
+                out.setdefault(k, dict(level='L1', match='course', quote=s, course=c['t']))
+    return out
 
 
 def unmatched_actions(card, n=5):
