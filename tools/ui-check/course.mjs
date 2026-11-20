@@ -6,6 +6,6 @@ await p.locator('#chat-input').fill('작년에 요양보호사 자격취득과�
 await p.getByRole('button', { name: '경험 카드 만들기 →' }).click(); await p.waitForTimeout(600)
 const card = p.locator('main'); const n = await p.getByText(/수료 과정:/).count()
 await p.getByText(/수료 과정:/).first().scrollIntoViewIfNeeded(); await shot('1-card')
-console.log('수료 과정 표시:', n)
+console.log('수료 과정 표시:', n, '카드 유형:', (await state()).cards[0].card.type, '/', (await state()).cards[0].card.activity)
 console.log((await state()).cards[0].competencies.map(k => `${k.keyword}(${k.level}${k.match === 'course' ? ', 과정' : ''})`).join(', '))
 await close()
