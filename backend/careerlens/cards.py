@@ -17,6 +17,7 @@ RANK = {'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3}
 
 # shortcut: 행동·성과 판정이 정규식이다(시뮬레이션 그대로). P3 인터뷰(LLM 슬롯 추출)가 붙으면 슬롯 값으로 판정한다.
 LEARN = re.compile(r'배웠|수강|수료|강의를 들|공부했|익혔')
+HELD = re.compile(r'취득했|취득함|합격|땄|보유')   # 자격을 실제로 가졌다는 말. '자격취득과정 수료'는 아니다
 ACTION = re.compile(r'했|맡|만들|개발|집계|정리|수집|검증|발행|담당|운반|운영|관리|응대|발표|제작|분석')
 RESULT = re.compile(r'\d+\s*(?:명|건|%|시간|분|개)\D{0,12}(?:사용|줄|늘|증가|감소|단축|달성)|에서\s*\d+\S*으로|수상|A\+|배포|채택')
 TEAM = re.compile(r'우리 팀|팀이|팀은')
@@ -47,7 +48,8 @@ def build_card(title, typ, text):
         lic += [n for n in non if n.startswith('license')]
         for k, mt in kws.items():
             if typ == 'certificate':
-                lv = 'L3'  # 자격 규칙으로 연결된 역량만 들어옴(P1 F0-2)
+                # 자격 규칙으로 연결된 역량만 들어옴(P1 F0-2). 과정을 수료만 했으면 P3 3.1·4.2대로 L1
+                lv = 'L1' if LEARN.search(s) and not HELD.search(s) else 'L3'
             elif LEARN.search(s) or not ACTION.search(s):
                 lv = 'L1'
             elif team_only:

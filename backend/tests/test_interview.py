@@ -136,3 +136,12 @@ def test_course_name_links_course_competencies_at_l1():
     j = I.new_card('요양원 근무', 'job', '요양원에서 5년 동안 어르신 식사를 도와 드렸어요.')
     I.fill(j, 'actions', '어르신 식사 도움', '요양원에서 5년 동안 어르신 식사를 도와 드렸어요', 'chat_0')
     assert not any(v['match'] == 'course' for v in I.competencies(j).values())
+
+
+def test_certificate_card_course_completion_is_l1_not_l3():
+    """AI가 수료 이야기를 자격증 카드로 분류해도, 과정 수료만이면 자격 규칙 역량은 L1(P3 3.1·4.2). 취득·보유면 L3."""
+    from careerlens.cards import build_card
+    done = build_card('요양보호사 자격취득과정 수료', 'certificate', '작년에 요양보호사 자격취득과정을 수료했어요.')['comps']
+    held = build_card('요양보호사', 'certificate', '요양보호사 자격증을 취득했습니다.')['comps']
+    assert done and {v['level'] for v in done.values()} == {'L1'}
+    assert held and {v['level'] for v in held.values()} == {'L3'}
