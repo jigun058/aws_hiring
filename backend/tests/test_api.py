@@ -71,3 +71,11 @@ def test_removed_competency_leaves_score(client):
     assert [j['score'] for j in cut['jobs']] != [j['score'] for j in full['jobs']]
     both = client.post('/api/recommend', json=dict(cards=[dict(card, removed=[56]), PARK[1]])).json()   # 다른 카드엔 남아 있음
     assert both['user_keywords'] == client.post('/api/recommend', json=dict(cards=[card, PARK[1]])).json()['user_keywords']
+
+
+def test_demo_link_redirects_relative():
+    """제출한 시연 영상 링크 /demo → /demo/ (CloudFront 뒤에서도 깨지지 않게 상대 주소)."""
+    from fastapi.testclient import TestClient
+    from careerlens.api import app
+    r = TestClient(app).get('/demo', follow_redirects=False)
+    assert r.status_code == 307 and r.headers['location'] == '/demo/'

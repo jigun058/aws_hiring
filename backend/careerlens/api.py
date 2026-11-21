@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -585,6 +585,12 @@ def chat_stream(req: ChatReq):
             alerts.report('chat', '/api/chat/stream', e)
             yield line({'error': DOWN})
     return StreamingResponse(gen(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+@app.get('/demo', include_in_schema=False)
+def demo_page():
+    """제출용 시연 영상 링크. 기본 디렉터리 리디렉션은 EC2 주소(Host)로 넘겨 CloudFront 뒤에서 깨지므로 상대 주소로 넘긴다."""
+    return RedirectResponse('/demo/')
 
 
 # 화면(frontend/ 빌드 결과)을 같은 주소에서 낸다. API 경로를 모두 등록한 뒤에 붙여야 /api가 가려지지 않는다.
