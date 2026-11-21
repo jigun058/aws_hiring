@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from careerlens import alerts
 from careerlens import cards as C
 from careerlens import courses, files, interview as I, llm, postings
 from careerlens.paths import BACKEND
@@ -25,6 +26,13 @@ from common import TODAY
 from recommender import WEIGHTS
 
 app = FastAPI(title='CareerLens')
+
+
+@app.exception_handler(Exception)
+async def server_error(request, exc):
+    """처리 못 한 오류(500): 관리자에게 알리고, 화면에는 짧은 안내만."""
+    alerts.report('server', f'{request.method} {request.url.path}', exc)
+    return JSONResponse({'detail': '서버에 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요.'}, status_code=500)
 
 # AI(Bedrock)를 부르는 API만 접속 주소별로 횟수를 센다. 한 바퀴 시연이 AI 호출 약 14번.
 # shortcut: 서버 메모리에 세므로 재시작하면 초기화되고 서버가 여러 대면 안 맞는다. 서버를 늘리면 CloudFront WAF로 옮긴다.
@@ -532,7 +540,8 @@ def chat(req: ChatReq):
             (parts if k == 'text' else used).append(v)
     except StopIteration as e:
         err = e.value
-    except Exception:   # Bedrock 오류·시간 초과: 상태 안내(DESIGN 5절)
+    except Exception as e:   # Bedrock 오류·시간 초과: 상태 안내(DESIGN 5절)
+        alerts.report('chat', '/api/chat', e)
         return dict(reply=DOWN, tools=used, error=True)
     if err:
         return dict(reply=err, tools=used, error=True)
@@ -572,7 +581,8 @@ def chat_stream(req: ChatReq):
             if _clean(buf).strip():
                 yield line({'t': _clean(buf)})
             yield line({'error': err} if err else {'done': True})
-        except Exception:
+        except Exception as e:
+            alerts.report('chat', '/api/chat/stream', e)
             yield line({'error': DOWN})
     return StreamingResponse(gen(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 

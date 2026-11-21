@@ -5,6 +5,8 @@ import json
 import os
 import re
 
+from careerlens import alerts
+
 MODEL = os.environ.get('CL_MODEL', 'global.anthropic.claude-sonnet-4-6')
 REGION = os.environ.get('CL_REGION', 'ap-northeast-2')
 _client = None
@@ -80,7 +82,8 @@ def ask_json(system, user, max_tokens=1000, model=None, usage=None):
             return json.loads(re.sub(r'^```(?:json)?|```$', '', t.strip()).strip())
         except json.JSONDecodeError:
             continue
-        except Exception:   # 네트워크·권한·시간 초과: 규칙 대체로
+        except Exception as e:   # 네트워크·권한·시간 초과: 규칙 대체로
+            alerts.report('bedrock', 'ask_json', e)
             return None
     return None
 
@@ -107,7 +110,8 @@ def transcribe_image(data, fmt):
     msgs = [{'role': 'user', 'content': [{'image': {'format': fmt, 'source': {'bytes': data}}}, {'text': '사진 속 글자를 옮겨 적어 주세요.'}]}]
     try:
         return _text(converse(system, msgs, 1500)).strip()
-    except Exception:
+    except Exception as e:
+        alerts.report('bedrock', 'transcribe_image', e)
         return None
 
 

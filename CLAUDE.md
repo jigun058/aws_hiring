@@ -72,4 +72,5 @@
 - 자세한 내용은 `docs/context/02-aws-계정-제원.md`.
 - 배포(11/19, 서울 리전): 주소 https://d3lowpvdkyf7ly.cloudfront.net → CloudFront(`E38S0574VLXD5Q`, 캐시 끔) → EC2 `i-079608471f3730473`(t3.small, Ubuntu 24.04, 8000번은 CloudFront에서만 받음, 보안 그룹 `careerlens-web`). 서버는 `/opt/careerlens`에서 systemd 서비스 `careerlens`로 돈다. Bedrock·S3 권한은 EC2 역할 `careerlens-ec2`(SSO 로그인 만료와 무관). 배포 묶음은 S3 `careerlens-deploy-010539085740`.
 - 다시 배포: `./deploy/redeploy.sh`(커밋된 코드와 새로 빌드한 화면만 올림, 큰 데이터가 바뀌면 `DATA=1`). 처음 서버를 만들 때 쓴 부팅 스크립트는 `deploy/user-data.sh`. 서버 안 명령은 SSH가 아니라 SSM(`aws ssm send-command`)으로 한다.
-- EC2를 멈췄다 켜면 공개 주소가 바뀌어 CloudFront 원본을 고쳐야 한다. 발표 전에는 멈추지 않는다. 다 쓰면 CloudFront 끄기 → EC2 terminate → S3·역할·보안 그룹 삭제.
+- 오류 알림(11/21): 서버(`careerlens/alerts.py`, 환경 변수 `CL_ALERT_QUEUE`가 있을 때만) → SQS `careerlens-alerts` → Lambda `careerlens-alerts`(`deploy/alerts/lambda_function.py`) → SNS `careerlens-alerts` → 관리자 이메일. DLQ `careerlens-alerts-dlq` + CloudWatch 경보 `careerlens-alerts-dlq`. 만들기·고치기는 `ALERT_EMAIL=… ./deploy/alerts.sh`(여러 번 돌려도 됨, 서버의 systemd 추가 설정 `careerlens.service.d/alerts.conf`도 넣음). EC2를 새로 만들면 다시 돌린다.
+- EC2를 멈췄다 켜면 공개 주소가 바뀌어 CloudFront 원본을 고쳐야 한다. 발표 전에는 멈추지 않는다. 다 쓰면 CloudFront 끄기 → EC2 terminate → S3·역할·보안 그룹 삭제. 알림도 지운다: 경보 → Lambda 연결·함수 → SQS 두 개 → SNS 주제 → 역할 `careerlens-alerts-lambda`, EC2 역할의 `alerts-send` 정책.
