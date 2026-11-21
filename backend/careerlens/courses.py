@@ -20,6 +20,13 @@ for c in _d['crs']:
     for k, rel, _src in c['k']:
         BY_KW[k].append((rel, c['id']))
 N_COURSES = len(CRS)
+OCC_CRS = defaultdict(set)   # 직무 → 맞는 과정: occCrs(직무별 최대 30개) + 과정별 연결 직무(과정별 최대 5개)
+for o, lst in _d['occCrs'].items():
+    OCC_CRS[o].update(cid for cid, _ in lst)
+for c in _d['crs']:
+    for o, _f, _k in c['occ']:
+        OCC_CRS[o].add(c['id'])
+OCC_CRS = dict(OCC_CRS)
 
 
 def _view(c):
@@ -56,8 +63,13 @@ def match(text):
 
 def for_keyword(kw_idx, oid=None, n=3):
     fit = lambda cid: next((f for o, f, _ in CRS[cid]['occ'] if o == oid), 0)
+    cands = BY_KW.get(kw_idx, [])
+    # [기본값] 11/21: 과정이 연결된 직무면 그 직무에 맞는 과정만(보육교사 "안전 관리" → 소방설비 과정이 나오던 문제).
+    # 연결된 과정이 없는 직무만 전처리 문서 방식(역량 연관도 순)
+    if oid in OCC_CRS:
+        cands = [x for x in cands if x[1] in OCC_CRS[oid]]
     out = []
-    for rel, cid in sorted(BY_KW.get(kw_idx, []), key=lambda x: (-x[0], -fit(x[1]), x[1])):
+    for rel, cid in sorted(cands, key=lambda x: (-x[0], -fit(x[1]), x[1])):
         v = _view(CRS[cid])
         if v:
             out.append(dict(v, relevance=rel))

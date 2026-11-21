@@ -6,6 +6,7 @@ import pytest
 
 from careerlens.cards import D, build_card
 from careerlens.recommend import Recommender
+import knowledge as K
 
 warnings.filterwarnings('ignore')
 
@@ -29,8 +30,12 @@ def scores(r):
 
 
 def test_reproduces_simulation_doc(R):
-    """경험 종류 보정(B2)을 끄면 로직팀 시뮬레이션 문서의 박물류 결과와 같다(경험 규칙 보정은 박물류에 영향 없음)."""
-    r = run(R, PARK, use_card_context=False)
+    """경험 종류 보정(B2)과 "전기" 보정(4번)을 끄면 로직팀 시뮬레이션 문서의 박물류 결과와 같다(경험 규칙 보정은 박물류에 영향 없음)."""
+    lex, R.lex = R.lex, K.compile_lexicon(K.load_keywords())
+    try:
+        r = run(R, PARK, use_card_context=False)
+    finally:
+        R.lex = lex
     assert scores(r) == [('지게차 운전원', 60.5), ('창고 관리원', 58.73), ('하역 및 적재 단순 종사원', 57.6)]
     assert [p['company'] for p in r['jobs'][0]['postings']] == [
         '주식회사 오로라유통에프엔비', '삼우컴퍼니 주식회사', '신우밸브 주식회사', '주식회사 쌍진기업', '케이더블유피', '(주) 유비라이트']
@@ -39,7 +44,7 @@ def test_reproduces_simulation_doc(R):
 def test_card_context_counts_job_experience(R):
     r = run(R, PARK)
     assert r['context'] == '인턴·직무 경력'
-    assert scores(r) == [('지게차 운전원', 64.99), ('창고 관리원', 62.59), ('하역 및 적재 단순 종사원', 61.51)]
+    assert scores(r) == [('지게차 운전원', 64.99), ('창고 관리원', 62.59), ('하역 및 적재 단순 종사원', 61.46)]
     assert scores(run(R, CHOI)) == [('경리 사무원', 59.56), ('회계 사무원', 57.5), ('영업 기획·관리·지원 사무원', 45.7)]
 
 
@@ -77,3 +82,9 @@ def test_dictionary_names_match_engine(R):
     예외: P1 최종판에서 트랙 A용으로 더한 IT 역량 4개(178~181)는 엔진·DB에 없다(트랙 B 영향 없음)."""
     p1_only = {'AI·머신러닝', '모바일 앱 개발', '데이터 엔지니어링', '소프트웨어 테스트'}
     assert {name for _, name in D.values()} - p1_only <= set(R.kw_list)
+
+
+def test_driving_license_is_not_electric_knowledge(R):
+    # 시뮬레이션 4번(TEAM T16, 로직팀 결정 11/21): 사용자 글의 "운전기능사·운전기사"는 전기·전자 지식이 아니다. 진짜 "전기"는 그대로
+    assert '전기·전자 지식' not in R.extract('지게차운전기능사 자격증, 택배 운전기사 5년')['keywords']
+    assert '전기·전자 지식' in R.extract('전기기능사 자격증, 전기 배선 작업')['keywords']

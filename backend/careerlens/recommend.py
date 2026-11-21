@@ -8,6 +8,7 @@
 - 시뮬레이션 5번(C4·C5 제외)은 보류(BACKLOG B1): 엔진 그대로
 - 사용자가 카드에서 지운 역량(card['removed'], 역량 이름)은 엔진이 글에서 다시 찾아도 뺀다. 다른 카드에 남아 있으면 둔다
 """
+import re
 import threading
 
 from careerlens import paths  # noqa: F401  vendor 경로 설정
@@ -34,6 +35,9 @@ class Recommender(CareerMatcher):
     def __init__(self):
         super().__init__()
         apply_to(self)
+        # 시뮬레이션 4번: "지게차운전기능사·운전기사" 안의 "전기"가 전기·전자 지식으로 잡힘. 사용자 글에서만 막는다(TEAM T16, 공고 쪽은 그대로)
+        self.lex = [(kw, re.compile(p.pattern.replace('전기', '(?<!운)전기'), p.flags) if kw == '전기·전자 지식' else p)
+                    for kw, p in self.lex]
         self.near = set(self.posts.loc[self.posts.is_near_duplicate.astype(bool), 'posting_id'])
         self._lock = threading.Lock()   # extract 보정값을 인스턴스에 잠깐 싣기 때문에 한 번에 하나만
         self._override = None

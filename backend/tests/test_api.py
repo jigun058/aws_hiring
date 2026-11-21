@@ -79,3 +79,12 @@ def test_demo_link_redirects_relative():
     from careerlens.api import app
     r = TestClient(app).get('/demo', follow_redirects=False)
     assert r.status_code == 307 and r.headers['location'] == '/demo/'
+
+
+def test_courses_fit_the_occupation(client):
+    """11/21: 보육교사의 '안전 관리'에 소방설비 과정이 붙던 문제. 과정이 연결된 직무는 그 직무에 맞는 과정만."""
+    from careerlens import courses
+    co = client.post('/api/courses', json=dict(cards=CARE, occupation_id='OCC0277')).json()
+    names = [c['name'] for g in co['gaps'] for c in g['courses']]
+    assert names and not any('소방' in n or '전기' in n for n in names)
+    assert all(c['course_id'] in courses.OCC_CRS['OCC0277'] for g in co['gaps'] for c in g['courses'])

@@ -195,7 +195,8 @@ def course_plan(req: CoursesReq):
         a = A.get(req.posting_id)
         if a is None:
             raise HTTPException(404, f'공고를 찾지 못했어요: {req.posting_id}')
-        gaps = [(q['kw_idx'], q['type']) for q in a['requirements'] if q['keyword'] not in kws]
+        # [기본값] 11/21: 공고의 필수·우대만(하게 될 업무까지 넣으면 엉뚱한 과정이 많이 붙음)
+        gaps = [(q['kw_idx'], q['type']) for q in a['requirements'] if q['keyword'] not in kws and q['type'] in ('필수', '우대')]
         lics = postings.user_license_ids(cards)
         missing = [v['name'] for v in a['licenses'] if v['legal_required'] and v['license_id'] not in lics]
     else:   # 엔진의 competency_gaps와 같은 기준: 직무 필수·주요 역량 중 없는 것, 배점 순
