@@ -10,3 +10,4 @@ backend/vendor/engine/work/
 docs/design/uploads/
 backend/data/derived/
 frontend/dist/
+*.mp4
